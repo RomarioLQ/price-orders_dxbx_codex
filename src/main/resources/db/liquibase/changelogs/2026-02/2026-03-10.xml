@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 2026-03-10: единая миграция (актуальная модель) -->
+
+    <!-- system_users -->
+    <changeSet id="2026-03-10-1" author="ro.bekmukhamedov">
+        <comment>Created system_users table (employees of customer).</comment>
+        <sql>
+            CREATE TABLE system_users (
+                                          id uuid PRIMARY KEY,
+                                          first_name varchar(50),
+                                          last_name varchar(50),
+                                          phone varchar(15),
+                                          tg_user_id varchar(50) NOT NULL
+            );
+        </sql>
+    </changeSet>
+
+    <!-- customer -->
+    <changeSet id="2026-03-10-2" author="ro.bekmukhamedov">
+        <comment>Created customer table.</comment>
+        <sql>
+            CREATE TABLE customer (
+                                      id uuid PRIMARY KEY,
+                                      name varchar(200) NOT NULL,
+                                      inn varchar(20) NOT NULL,
+                                      kpp varchar(50),
+                                      system_guid uuid,
+                                      CONSTRAINT unique_customer_system_guid UNIQUE (system_guid)
+            );
+        </sql>
+    </changeSet>
+
+    <!-- user_customer_link (M:N) -->
+    <changeSet id="2026-03-10-3" author="ro.bekmukhamedov">
+        <comment>Created user_customer_link table (relation between customers and users).</comment>
+        <sql>
+            CREATE TABLE user_customer_link (
+                                                id uuid PRIMARY KEY,
+                                                user_id uuid NOT NULL,
+                                                customer_id uuid NOT NULL,
+                                                FOREIGN KEY (customer_id) REFERENCES customer(id),
+                                                FOREIGN KEY (user_id) REFERENCES system_users(id)
+            );
+
+            CREATE INDEX idx_user_customer_link_user_id ON user_customer_link(user_id);
+            CREATE INDEX idx_user_customer_link_customer_id ON user_customer_link(customer_id);
+        </sql>
+    </changeSet>
+
+    <!-- address (1:M customer -> address через FK customer_id) -->
+    <changeSet id="2026-03-10-4" author="ro.bekmukhamedov">
+        <comment>Created address table (tabular part of customer addresses).</comment>
+        <sql>
+            CREATE TABLE address (
+                                     id uuid PRIMARY KEY,
+                                     customer_id uuid NOT NULL,
+                                     additional_id varchar(500) NOT NULL,
+                                     name varchar(200),
+                                     kpp varchar(50),
+                                     FOREIGN KEY (customer_id) REFERENCES customer(id)
+            );
+
+            CREATE INDEX idx_address_customer_id ON address(customer_id);
+        </sql>
+    </changeSet>
+
+    <!-- supplier -->
+    <changeSet id="2026-03-10-5" author="ro.bekmukhamedov">
+        <comment>Created supplier table.</comment>
+        <sql>
+            CREATE TABLE supplier (
+                                      id uuid PRIMARY KEY,
+                                      name varchar(100) NOT NULL
+            );
+        </sql>
+    </changeSet>
+
+    <!-- customer_external_id (1:M customer -> customer_external_id; 1:M supplier -> customer_external_id) -->
+    <changeSet id="2026-03-10-6" author="ro.bekmukhamedov">
+        <comment>Created customer_external_id table (external GUID of customer in supplier accounting system).</comment>
+        <sql>
+            CREATE TABLE customer_external_id (
+                                                  id uuid PRIMARY KEY,
+                                                  customer_id uuid NOT NULL,
+                                                  supplier_id uuid NOT NULL,
+                                                  customer_external_guid uuid NOT NULL,
+
+                                                  CONSTRAINT uq_customer_external_id_customer_supplier UNIQUE (customer_id, supplier_id),
+
+                                                  FOREIGN KEY (customer_id) REFERENCES customer(id),
+                                                  FOREIGN KEY (supplier_id) REFERENCES supplier(id)
+            );
+
+            CREATE INDEX idx_customer_external_id_customer_id ON customer_external_id(customer_id);
+            CREATE INDEX idx_customer_external_id_supplier_id ON customer_external_id(supplier_id);
+        </sql>
+    </changeSet>
+
+    <!-- price_list -->
+    <changeSet id="2026-03-10-7" author="ro.bekmukhamedov">
+        <comment>Created price_list table (price lists from suppliers).</comment>
+        <sql>
+            CREATE TABLE price_list (
+                                        id uuid PRIMARY KEY,
+                                        supplier_id uuid NOT NULL,
+                                        customer_id uuid,
+                                        start_date timestamp NOT NULL,
+                                        end_date timestamp,
+                                        is_active boolean NOT NULL,
+                                        FOREIGN KEY (supplier_id) REFERENCES supplier(id),
+                                        FOREIGN KEY (customer_id) REFERENCES customer(id)
+            );
+        </sql>
+    </changeSet>
+
+    <!-- nomenclature + price_positions -->
+    <changeSet id="2026-03-10-8" author="ro.bekmukhamedov">
+        <comment>Created nomenclature and price_positions tables.</comment>
+        <sql>
+            CREATE TABLE nomenclature (
+                                          id uuid PRIMARY KEY,
+                                          code varchar(50) NOT NULL,
+                                          name varchar(255) NOT NULL,
+                                          supplier_id uuid NOT NULL,
+                                          FOREIGN KEY (supplier_id) REFERENCES supplier(id)
+            );
+
+            CREATE TABLE price_positions (
+                                             id uuid PRIMARY KEY,
+                                             price_id uuid NOT NULL,
+                                             nomenclature_id uuid NOT NULL,
+                                             unit_measure varchar(20),
+                                             price_with_vat float NOT NULL,
+                                             vat BIGINT NOT NULL,
+
+                                             CONSTRAINT uq_price_positions_price_nomenclature UNIQUE (price_id, nomenclature_id),
+                                             FOREIGN KEY (nomenclature_id) REFERENCES nomenclature(id),
+                                             FOREIGN KEY (price_id) REFERENCES price_list(id)
+            );
+        </sql>
+    </changeSet>
+
+    <!-- system_orders (включая number) -->
+    <changeSet id="2026-03-10-9" author="ro.bekmukhamedov">
+        <comment>Created system_orders table (client orders to supplier).</comment>
+        <sql>
+            CREATE TABLE system_orders (
+                                           id uuid PRIMARY KEY,
+                                           customer_id uuid NOT NULL,
+                                           supplier_id uuid NOT NULL,
+                                           user_id uuid NOT NULL,
+                                           datetime timestamp NOT NULL,
+                                           number varchar(100),
+                                           status boolean DEFAULT FALSE,
+                                           FOREIGN KEY (customer_id) REFERENCES customer(id),
+                                           FOREIGN KEY (supplier_id) REFERENCES supplier(id),
+                                           FOREIGN KEY (user_id) REFERENCES system_users(id)
+            );
+        </sql>
+    </changeSet>
+
+    <!-- order_item -->
+    <changeSet id="2026-03-10-10" author="ro.bekmukhamedov">
+        <comment>Created order_item table (items in the order).</comment>
+        <sql>
+            CREATE TABLE order_item (
+                                        id uuid PRIMARY KEY,
+                                        order_id uuid NOT NULL,
+                                        nomenclature_id uuid NOT NULL,
+                                        count integer NOT NULL,
+                                        price float NOT NULL,
+                                        sum float NOT NULL,
+                                        FOREIGN KEY (order_id) REFERENCES system_orders(id),
+                                        FOREIGN KEY (nomenclature_id) REFERENCES nomenclature(id)
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
