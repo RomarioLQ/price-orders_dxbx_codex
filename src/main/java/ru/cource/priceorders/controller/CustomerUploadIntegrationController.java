@@ -22,7 +22,7 @@ public class CustomerUploadIntegrationController {
 
   private final CustomerUploadService service;
 
-  @PostMapping("/upload")
+  @PostMapping()
   public CustomerUploadResponseDto upload(@RequestBody @NotNull CustomerUploadRequestDto request) {
     return service.upload(request);
   }
