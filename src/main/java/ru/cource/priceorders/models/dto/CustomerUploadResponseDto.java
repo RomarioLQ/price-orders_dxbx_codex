@@ -9,42 +9,47 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Ответ загрузки клиентов и адресов.
- * Возвращает созданные/обновлённые сущности (uuid) для последующего ручного
- * создания пользователей и связей.
+ * Результат сопоставления внешних идентификаторов клиентов поставщика.
  */
 @Value
 @Builder
 @Jacksonized
 public class CustomerUploadResponseDto {
 
-  @JsonProperty("created_customers")
-  int createdCustomers;
+  @JsonProperty("total")
+  int total;
 
-  @JsonProperty("updated_customers")
-  int updatedCustomers;
+  @JsonProperty("matched")
+  int matched;
 
-  @JsonProperty("created_addresses")
-  int createdAddresses;
+  @JsonProperty("created")
+  int created;
 
-  @JsonProperty("created_customer_address_links")
-  int createdCustomerAddressLinks;
+  @JsonProperty("skipped")
+  int skipped;
 
-  @JsonProperty("customers")
-  List<CustomerResultDto> customers;
+  @JsonProperty("not_found")
+  int notFound;
+
+  @JsonProperty("processed")
+  List<ProcessedItemDto> processed;
+
+  @JsonProperty("not_matched")
+  List<NotMatchedItemDto> notMatched;
 
   @Value
   @Builder
   @Jacksonized
-  public static class CustomerResultDto {
-    @JsonProperty("id")
-    UUID id;
+  public static class ProcessedItemDto {
 
-    @JsonProperty("system_guid")
-    UUID systemGuid;
+    @JsonProperty("customer_id")
+    UUID customerId;
 
-    @JsonProperty("name")
-    String name;
+    @JsonProperty("supplier_id")
+    UUID supplierId;
+
+    @JsonProperty("customer_external_id")
+    UUID customerExternalId;
 
     @JsonProperty("inn")
     String inn;
@@ -52,18 +57,25 @@ public class CustomerUploadResponseDto {
     @JsonProperty("kpp")
     String kpp;
 
-    @JsonProperty("addresses")
-    List<AddressResultDto> addresses;
+    @JsonProperty("status")
+    String status;
   }
 
   @Value
   @Builder
   @Jacksonized
-  public static class AddressResultDto {
-    @JsonProperty("id")
-    UUID id;
+  public static class NotMatchedItemDto {
 
-    @JsonProperty("address")
-    String address;
+    @JsonProperty("customer_external_id")
+    UUID customerExternalId;
+
+    @JsonProperty("inn")
+    String inn;
+
+    @JsonProperty("kpp")
+    String kpp;
+
+    @JsonProperty("reason")
+    String reason;
   }
 }
