@@ -27,6 +27,7 @@ import java.util.UUID;
 public class CustomerUploadService {
 
   private static final String STATUS_CREATED = "CREATED";
+  private static final String STATUS_UPDATED = "UPDATED";
   private static final String STATUS_SKIPPED = "SKIPPED_ALREADY_EXISTS";
 
   private final CustomerRepository customerRepository;
@@ -68,21 +69,12 @@ public class CustomerUploadService {
       matched++;
 
       UUID customerId = customer.get().getId();
-      boolean exists = customerExternalIdRepository.existsByCustomerIdAndSupplierId(customerId, supplierId);
-
-      String status;
-      if (exists) {
-        status = STATUS_SKIPPED;
-        skipped++;
-      } else {
-        CustomerExternalId mapping = new CustomerExternalId();
-        mapping.setId(UUID.randomUUID());
-        mapping.setCustomerId(customerId);
-        mapping.setSupplierId(supplierId);
-        mapping.setCustomerExternalId(item.getCustomerExternalId());
-        customerExternalIdRepository.save(mapping);
-        status = STATUS_CREATED;
+      UpsertResult upsertResult = upsertMapping(customerId, supplierId, item.getCustomerExternalId());
+      if (upsertResult.created()) {
         created++;
+      }
+      if (upsertResult.skipped()) {
+        skipped++;
       }
 
       processed.add(CustomerUploadResponseDto.ProcessedItemDto.builder()
@@ -91,7 +83,7 @@ public class CustomerUploadService {
           .customerExternalId(item.getCustomerExternalId())
           .inn(item.getInn())
           .kpp(item.getKpp())
-          .status(status)
+          .status(upsertResult.status())
           .build());
     }
 
@@ -108,6 +100,30 @@ public class CustomerUploadService {
 
   private Optional<Customer> findCustomer(CustomerUploadRequestDto item) {
     return customerRepository.findFirstByInnAndKpp(item.getInn(), item.getKpp());
+  }
+
+  private UpsertResult upsertMapping(UUID customerId, UUID supplierId, UUID customerExternalId) {
+    Optional<CustomerExternalId> existingOpt = customerExternalIdRepository
+        .findFirstByCustomerIdAndSupplierId(customerId, supplierId);
+
+    if (existingOpt.isEmpty()) {
+      CustomerExternalId mapping = new CustomerExternalId();
+      mapping.setId(UUID.randomUUID());
+      mapping.setCustomerId(customerId);
+      mapping.setSupplierId(supplierId);
+      mapping.setCustomerExternalId(customerExternalId);
+      customerExternalIdRepository.save(mapping);
+      return new UpsertResult(STATUS_CREATED, true, false);
+    }
+
+    CustomerExternalId existing = existingOpt.get();
+    if (existing.getCustomerExternalId().equals(customerExternalId)) {
+      return new UpsertResult(STATUS_SKIPPED, false, true);
+    }
+
+    existing.setCustomerExternalId(customerExternalId);
+    customerExternalIdRepository.save(existing);
+    return new UpsertResult(STATUS_UPDATED, false, true);
   }
 
   private CustomerUploadRequestDto validateItem(CustomerUploadRequestDto item) {
@@ -144,5 +160,8 @@ public class CustomerUploadService {
         null,
         List.of(ParamDto.builder().key("field").value(field).build())
     );
+  }
+
+  private record UpsertResult(String status, boolean created, boolean skipped) {
   }
 }
