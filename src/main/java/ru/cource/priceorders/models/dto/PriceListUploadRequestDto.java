@@ -49,11 +49,11 @@ public class PriceListUploadRequestDto {
     Boolean isActive;
 
     /**
-     * Опционально: customer_system_guid для клиентского прайса.
+     * Опционально: customer_external_id для клиентского прайса.
      * Если null - общий прайс.
      */
-    @JsonProperty("customer_system_guid")
-    UUID customerSystemGuid;
+    @JsonProperty("customer_external_id")
+    UUID customerExternalId;
   }
 
   @Value

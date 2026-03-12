@@ -9,8 +9,4 @@ import java.util.UUID;
 public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
   Optional<Customer> findFirstByInnAndKpp(String inn, String kpp);
-
-  Optional<Customer> findFirstBySystemGuid(UUID systemGuid);
-
-  boolean existsBySystemGuid(UUID systemGuid);
 }

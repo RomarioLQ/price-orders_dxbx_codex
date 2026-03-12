@@ -3,7 +3,7 @@ package ru.cource.priceorders.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import ru.cource.priceorders.dao.CustomerRepository;
+import ru.cource.priceorders.dao.CustomerExternalIdRepository;
 import ru.cource.priceorders.dao.NomenclatureRepository;
 import ru.cource.priceorders.dao.PriceListRepository;
 import ru.cource.priceorders.dao.PricePositionRepository;
@@ -11,7 +11,6 @@ import ru.cource.priceorders.dao.SupplierRepository;
 import ru.cource.priceorders.exception.common.NotFoundException;
 import ru.cource.priceorders.exception.common.ValidationException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
-import ru.cource.priceorders.models.Customer;
 import ru.cource.priceorders.models.Nomenclature;
 import ru.cource.priceorders.models.PriceList;
 import ru.cource.priceorders.models.PricePosition;
@@ -35,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class PriceListUploadService {
 
   private final SupplierRepository supplierRepository;
-  private final CustomerRepository customerRepository;
+  private final CustomerExternalIdRepository customerExternalIdRepository;
   private final NomenclatureRepository nomenclatureRepository;
   private final PriceListRepository priceListRepository;
   private final PricePositionRepository pricePositionRepository;
@@ -67,16 +66,20 @@ public class PriceListUploadService {
     Boolean isActive = Optional.ofNullable(plDto.getIsActive())
         .orElseThrow(() -> validation("price_list.is_active", "is_active is required"));
 
-    UUID customerId = Optional.ofNullable(plDto.getCustomerSystemGuid())
-        .map(customerSystemGuid -> customerRepository.findFirstBySystemGuid(customerSystemGuid)
+    UUID customerId = Optional.ofNullable(plDto.getCustomerExternalId())
+        .map(customerExternalId -> customerExternalIdRepository
+            .findFirstBySupplierIdAndCustomerExternalId(supplierId, customerExternalId)
             .orElseThrow(() -> new NotFoundException(
-                "CUSTOMER_NOT_FOUND",
+                "CUSTOMER_EXTERNAL_ID_NOT_FOUND",
                 traceIdGenerator.gen(),
-                "Customer is not found",
+                "Customer external id is not found",
                 null,
-                List.of(ParamDto.builder().key("customerSystemGuid").value(customerSystemGuid.toString()).build())
+                List.of(
+                    ParamDto.builder().key("supplierId").value(supplierId.toString()).build(),
+                    ParamDto.builder().key("customerExternalId").value(customerExternalId.toString()).build()
+                )
             )))
-        .map(Customer::getId)
+        .getCustomerId()
         .orElse(null);
 
     UUID priceId = UUID.randomUUID();
