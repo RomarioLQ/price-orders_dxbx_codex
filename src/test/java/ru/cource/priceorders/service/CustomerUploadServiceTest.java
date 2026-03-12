@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,7 +53,7 @@ class CustomerUploadServiceTest {
 
     when(supplierRepository.existsById(supplierId)).thenReturn(true);
     when(customerRepository.findFirstByInnAndKpp("7700000001", "770001001")).thenReturn(Optional.of(customer));
-    when(customerExternalIdRepository.existsByCustomerIdAndSupplierId(customerId, supplierId)).thenReturn(false);
+    when(customerExternalIdRepository.findFirstByCustomerIdAndSupplierId(customerId, supplierId)).thenReturn(Optional.empty());
 
     CustomerUploadResponseDto response = customerUploadService.upload(supplierId, List.of(
         CustomerUploadRequestDto.builder()
@@ -99,4 +100,81 @@ class CustomerUploadServiceTest {
 
     verify(customerExternalIdRepository, never()).save(any(CustomerExternalId.class));
   }
+
+
+  @Test
+  void uploadUpdatesExternalIdWhenMappingAlreadyExists() {
+    UUID supplierId = UUID.fromString("3f95cf43-e820-2599-3da5-f40fb70da0ab");
+    UUID customerId = UUID.fromString("66666666-2222-3333-4444-555555555555");
+    UUID oldExternalId = UUID.fromString("aaaaaaaa-2222-3333-4444-555555555555");
+    UUID newExternalId = UUID.fromString("bbbbbbbb-2222-3333-4444-555555555555");
+
+    Customer customer = new Customer();
+    customer.setId(customerId);
+    customer.setInn("7700000001");
+    customer.setKpp("770001001");
+
+    CustomerExternalId mapping = new CustomerExternalId();
+    mapping.setId(UUID.randomUUID());
+    mapping.setCustomerId(customerId);
+    mapping.setSupplierId(supplierId);
+    mapping.setCustomerExternalId(oldExternalId);
+
+    when(supplierRepository.existsById(supplierId)).thenReturn(true);
+    when(customerRepository.findFirstByInnAndKpp("7700000001", "770001001")).thenReturn(Optional.of(customer));
+    when(customerExternalIdRepository.findFirstByCustomerIdAndSupplierId(customerId, supplierId))
+        .thenReturn(Optional.of(mapping));
+
+    CustomerUploadResponseDto response = customerUploadService.upload(supplierId, List.of(
+        CustomerUploadRequestDto.builder()
+            .customerExternalId(newExternalId)
+            .inn("7700000001")
+            .kpp("770001001")
+            .build()
+    ));
+
+    assertThat(response.getCreated()).isEqualTo(0);
+    assertThat(response.getSkipped()).isEqualTo(1);
+    assertThat(response.getProcessed().getFirst().getStatus()).isEqualTo("UPDATED");
+
+    verify(customerExternalIdRepository).save(argThat(saved -> newExternalId.equals(saved.getCustomerExternalId())));
+  }
+
+  @Test
+  void uploadSkipsWhenExistingExternalIdEqualsIncoming() {
+    UUID supplierId = UUID.fromString("3f95cf43-e820-2599-3da5-f40fb70da0ab");
+    UUID customerId = UUID.fromString("66666666-2222-3333-4444-555555555555");
+    UUID externalId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+
+    Customer customer = new Customer();
+    customer.setId(customerId);
+    customer.setInn("7700000001");
+    customer.setKpp("770001001");
+
+    CustomerExternalId mapping = new CustomerExternalId();
+    mapping.setId(UUID.randomUUID());
+    mapping.setCustomerId(customerId);
+    mapping.setSupplierId(supplierId);
+    mapping.setCustomerExternalId(externalId);
+
+    when(supplierRepository.existsById(supplierId)).thenReturn(true);
+    when(customerRepository.findFirstByInnAndKpp("7700000001", "770001001")).thenReturn(Optional.of(customer));
+    when(customerExternalIdRepository.findFirstByCustomerIdAndSupplierId(customerId, supplierId))
+        .thenReturn(Optional.of(mapping));
+
+    CustomerUploadResponseDto response = customerUploadService.upload(supplierId, List.of(
+        CustomerUploadRequestDto.builder()
+            .customerExternalId(externalId)
+            .inn("7700000001")
+            .kpp("770001001")
+            .build()
+    ));
+
+    assertThat(response.getCreated()).isEqualTo(0);
+    assertThat(response.getSkipped()).isEqualTo(1);
+    assertThat(response.getProcessed().getFirst().getStatus()).isEqualTo("SKIPPED_ALREADY_EXISTS");
+
+    verify(customerExternalIdRepository, never()).save(argThat(saved -> externalId.equals(saved.getCustomerExternalId()) && customerId.equals(saved.getCustomerId())));
+  }
+
 }
