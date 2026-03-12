@@ -26,10 +26,10 @@ public class CustomerAddressSearchSelectService {
   private final AddressRepository addressRepository;
 
   public List<CustomerAddressSearchSelectResponseDto> searchSelect(
-      TelegramUserData telegramUserData,
-      String searchString
+      String searchString,
+      TelegramUserData telegramUserData
   ) {
-    UUID customerId = telegramUserContextResolverService.resolve(telegramUserData).customerId();
+      UUID customerId = telegramUserContextResolverService.resolve(telegramUserData).customerId();
     String normalizedSearch = Optional.ofNullable(searchString).orElse("").trim();
 
     List<CustomerAddressSearchSelectProjection> rows =
