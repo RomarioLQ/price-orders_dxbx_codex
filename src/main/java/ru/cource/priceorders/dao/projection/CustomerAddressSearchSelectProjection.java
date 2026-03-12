@@ -9,5 +9,5 @@ public interface CustomerAddressSearchSelectProjection {
 
   UUID getId();
 
-  String getAddress();
+  String getName();
 }
