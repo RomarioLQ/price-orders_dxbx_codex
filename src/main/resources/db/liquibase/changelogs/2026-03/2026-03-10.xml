@@ -87,7 +87,7 @@
                                                   id uuid PRIMARY KEY,
                                                   customer_id uuid NOT NULL,
                                                   supplier_id uuid NOT NULL,
-                                                  customer_external_guid uuid NOT NULL,
+                                                  customer_external_id uuid NOT NULL,
 
                                                   CONSTRAINT uq_customer_external_id_customer_supplier UNIQUE (customer_id, supplier_id),
 

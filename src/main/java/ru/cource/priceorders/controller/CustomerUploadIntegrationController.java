@@ -17,7 +17,7 @@ import ru.cource.priceorders.service.CustomerUploadService;
 @RestController
 @Validated
 @RequiredArgsConstructor
-@RequestMapping("/integration/price-orders/v1/customers")
+@RequestMapping("/api/v1/customer-external-ids")
 public class CustomerUploadIntegrationController {
 
   private final CustomerUploadService service;
