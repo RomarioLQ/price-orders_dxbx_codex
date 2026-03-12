@@ -4,13 +4,11 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import ru.cource.priceorders.dao.AddressRepository;
-import ru.cource.priceorders.dao.CustomerAddressAccessRepository;
 import ru.cource.priceorders.dao.CustomerRepository;
 import ru.cource.priceorders.exception.common.ValidationException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
 import ru.cource.priceorders.models.Address;
 import ru.cource.priceorders.models.Customer;
-import ru.cource.priceorders.models.CustomerAddressAccess;
 import ru.cource.priceorders.models.dto.CustomerUploadRequestDto;
 import ru.cource.priceorders.models.dto.CustomerUploadResponseDto;
 import ru.dxbx.common.dto.error.ParamDto;
@@ -33,7 +31,6 @@ public class CustomerUploadService {
 
   private final CustomerRepository customerRepository;
   private final AddressRepository addressRepository;
-  private final CustomerAddressAccessRepository customerAddressAccessRepository;
   private final TraceIdGenerator traceIdGenerator;
 
   @Transactional
@@ -46,7 +43,6 @@ public class CustomerUploadService {
     AtomicInteger createdCustomers = new AtomicInteger(0);
     AtomicInteger updatedCustomers = new AtomicInteger(0);
     AtomicInteger createdAddresses = new AtomicInteger(0);
-    AtomicInteger createdLinks = new AtomicInteger(0);
 
     Set<UUID> requestGuids = new HashSet<>();
 
@@ -111,29 +107,16 @@ public class CustomerUploadService {
               .filter(addressText -> !addressText.isBlank())
               .distinct()
               .map(addressText -> {
-                Address address = addressRepository.findFirstByAddress(addressText)
-                    .orElseGet(() -> {
-                      Address created = new Address();
-                      created.setId(UUID.randomUUID());
-                      created.setAddress(addressText);
-                      createdAddresses.incrementAndGet();
-                      return created;
-                    });
-
-                Address savedAddress = addressRepository.save(address);
-
-                if (!customerAddressAccessRepository.existsByCustomerIdAndAddressId(savedCustomer.getId(), savedAddress.getId())) {
-                  CustomerAddressAccess link = new CustomerAddressAccess();
-                  link.setId(UUID.randomUUID());
-                  link.setCustomerId(savedCustomer.getId());
-                  link.setAddressId(savedAddress.getId());
-                  customerAddressAccessRepository.save(link);
-                  createdLinks.incrementAndGet();
-                }
+                Address created = new Address();
+                created.setId(UUID.randomUUID());
+                created.setCustomerId(savedCustomer.getId());
+                created.setName(addressText);
+                Address savedAddress = addressRepository.save(created);
+                createdAddresses.incrementAndGet();
 
                 return CustomerUploadResponseDto.AddressResultDto.builder()
                     .id(savedAddress.getId())
-                    .address(savedAddress.getAddress())
+                    .address(savedAddress.getName())
                     .build();
               })
               .toList();
@@ -153,7 +136,7 @@ public class CustomerUploadService {
         .createdCustomers(createdCustomers.get())
         .updatedCustomers(updatedCustomers.get())
         .createdAddresses(createdAddresses.get())
-        .createdCustomerAddressLinks(createdLinks.get())
+        .createdCustomerAddressLinks(0)
         .customers(resultCustomers)
         .build();
   }

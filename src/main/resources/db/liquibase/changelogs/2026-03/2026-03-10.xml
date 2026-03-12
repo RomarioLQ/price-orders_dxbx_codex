@@ -11,7 +11,7 @@
     <changeSet id="2026-03-10-1" author="ro.bekmukhamedov">
         <comment>Created system_users table (employees of customer).</comment>
         <sql>
-            CREATE TABLE system_users (
+            CREATE TABLE IF NOT EXISTS system_users (
                                           id uuid PRIMARY KEY,
                                           first_name varchar(255) NOT NULL,
                                           last_name varchar(255),
@@ -25,7 +25,7 @@
     <changeSet id="2026-03-10-2" author="ro.bekmukhamedov">
         <comment>Created customer table.</comment>
         <sql>
-            CREATE TABLE customer (
+            CREATE TABLE IF NOT EXISTS customer (
                                       id uuid PRIMARY KEY,
                                       name varchar(200) NOT NULL,
                                       inn varchar(20) NOT NULL,
@@ -40,7 +40,7 @@
     <changeSet id="2026-03-10-3" author="ro.bekmukhamedov">
         <comment>Created user_customer_link table (relation between customers and users).</comment>
         <sql>
-            CREATE TABLE user_customer_link (
+            CREATE TABLE IF NOT EXISTS user_customer_link (
                                                 id uuid PRIMARY KEY,
                                                 user_id uuid NOT NULL,
                                                 customer_id uuid NOT NULL,
@@ -48,8 +48,8 @@
                                                 FOREIGN KEY (user_id) REFERENCES system_users(id)
             );
 
-            CREATE INDEX idx_user_customer_link_user_id ON user_customer_link(user_id);
-            CREATE INDEX idx_user_customer_link_customer_id ON user_customer_link(customer_id);
+            CREATE INDEX IF NOT EXISTS idx_user_customer_link_user_id ON user_customer_link(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_customer_link_customer_id ON user_customer_link(customer_id);
         </sql>
     </changeSet>
 
@@ -57,14 +57,14 @@
     <changeSet id="2026-03-10-4" author="ro.bekmukhamedov">
         <comment>Created address table (tabular part of customer addresses).</comment>
         <sql>
-            CREATE TABLE address (
+            CREATE TABLE IF NOT EXISTS address (
                                      id uuid PRIMARY KEY,
                                      customer_id uuid NOT NULL,
                                      name varchar(1000),
                                      FOREIGN KEY (customer_id) REFERENCES customer(id)
             );
 
-            CREATE INDEX idx_address_customer_id ON address(customer_id);
+            CREATE INDEX IF NOT EXISTS idx_address_customer_id ON address(customer_id);
         </sql>
     </changeSet>
 
@@ -72,7 +72,7 @@
     <changeSet id="2026-03-10-5" author="ro.bekmukhamedov">
         <comment>Created supplier table.</comment>
         <sql>
-            CREATE TABLE supplier (
+            CREATE TABLE IF NOT EXISTS supplier (
                                       id uuid PRIMARY KEY,
                                       name varchar(100) NOT NULL
             );
@@ -83,7 +83,7 @@
     <changeSet id="2026-03-10-6" author="ro.bekmukhamedov">
         <comment>Created customer_external_id table (external GUID of customer in supplier accounting system).</comment>
         <sql>
-            CREATE TABLE customer_external_id (
+            CREATE TABLE IF NOT EXISTS customer_external_id (
                                                   id uuid PRIMARY KEY,
                                                   customer_id uuid NOT NULL,
                                                   supplier_id uuid NOT NULL,
@@ -95,8 +95,8 @@
                                                   FOREIGN KEY (supplier_id) REFERENCES supplier(id)
             );
 
-            CREATE INDEX idx_customer_external_id_customer_id ON customer_external_id(customer_id);
-            CREATE INDEX idx_customer_external_id_supplier_id ON customer_external_id(supplier_id);
+            CREATE INDEX IF NOT EXISTS idx_customer_external_id_customer_id ON customer_external_id(customer_id);
+            CREATE INDEX IF NOT EXISTS idx_customer_external_id_supplier_id ON customer_external_id(supplier_id);
         </sql>
     </changeSet>
 
@@ -104,7 +104,7 @@
     <changeSet id="2026-03-10-7" author="ro.bekmukhamedov">
         <comment>Created price_list table (price lists from suppliers).</comment>
         <sql>
-            CREATE TABLE price_list (
+            CREATE TABLE IF NOT EXISTS price_list (
                                         id uuid PRIMARY KEY,
                                         supplier_id uuid NOT NULL,
                                         customer_id uuid,
@@ -121,7 +121,7 @@
     <changeSet id="2026-03-10-8" author="ro.bekmukhamedov">
         <comment>Created nomenclature and price_positions tables.</comment>
         <sql>
-            CREATE TABLE nomenclature (
+            CREATE TABLE IF NOT EXISTS nomenclature (
                                           id uuid PRIMARY KEY,
                                           code varchar(50) NOT NULL,
                                           name varchar(255) NOT NULL,
@@ -129,7 +129,7 @@
                                           FOREIGN KEY (supplier_id) REFERENCES supplier(id)
             );
 
-            CREATE TABLE price_positions (
+            CREATE TABLE IF NOT EXISTS price_positions (
                                              id uuid PRIMARY KEY,
                                              price_id uuid NOT NULL,
                                              nomenclature_id uuid NOT NULL,
@@ -148,7 +148,7 @@
     <changeSet id="2026-03-10-9" author="ro.bekmukhamedov">
         <comment>Created system_orders table (client orders to supplier).</comment>
         <sql>
-            CREATE TABLE system_orders (
+            CREATE TABLE IF NOT EXISTS system_orders (
                                            id uuid PRIMARY KEY,
                                            customer_id uuid NOT NULL,
                                            supplier_id uuid NOT NULL,
@@ -167,7 +167,7 @@
     <changeSet id="2026-03-10-10" author="ro.bekmukhamedov">
         <comment>Created order_item table (items in the order).</comment>
         <sql>
-            CREATE TABLE order_item (
+            CREATE TABLE IF NOT EXISTS order_item (
                                         id uuid PRIMARY KEY,
                                         order_id uuid NOT NULL,
                                         nomenclature_id uuid NOT NULL,

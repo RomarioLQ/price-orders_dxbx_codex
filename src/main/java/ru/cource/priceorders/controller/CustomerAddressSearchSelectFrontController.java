@@ -32,6 +32,6 @@ public class CustomerAddressSearchSelectFrontController {
   ) {
     TelegramUserData telegramUserData =
         (TelegramUserData) request.getAttribute(TelegramRequestAttributes.TELEGRAM_USER_DATA);
-    return service.searchSelect(telegramUserData, searchString);
+    return service.searchSelect(searchString, telegramUserData);
   }
 }

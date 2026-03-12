@@ -26,17 +26,18 @@ public class CustomerAddressSearchSelectService {
   private final AddressRepository addressRepository;
 
   public List<CustomerAddressSearchSelectResponseDto> searchSelect(
-      TelegramUserData telegramUserData,
-      String searchString
+      String searchString,
+      TelegramUserData telegramUserData
   ) {
-    UUID customerId = telegramUserContextResolverService.resolve(telegramUserData).customerId();
+      UUID customerId = telegramUserContextResolverService.resolve(telegramUserData).customerId();
     String normalizedSearch = Optional.ofNullable(searchString).orElse("").trim();
 
-    List<CustomerAddressSearchSelectProjection> rows = addressRepository.searchSelect(customerId, normalizedSearch, limit);
+    List<CustomerAddressSearchSelectProjection> rows =
+        addressRepository.searchSelect(customerId, normalizedSearch, limit);
     return rows.stream()
         .map(r -> CustomerAddressSearchSelectResponseDto.builder()
             .id(r.getId())
-            .address(r.getAddress())
+            .address(r.getName())
             .build())
         .toList();
   }

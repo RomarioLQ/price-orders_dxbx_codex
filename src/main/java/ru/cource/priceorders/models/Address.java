@@ -22,6 +22,9 @@ public class Address {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "address", nullable = false, length = 500)
-  private String address;
+  @Column(name = "customer_id", nullable = false)
+  private UUID customerId;
+
+  @Column(name = "name", length = 1000)
+  private String name;
 }
