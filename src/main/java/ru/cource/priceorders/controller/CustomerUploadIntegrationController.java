@@ -5,14 +5,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.cource.priceorders.models.dto.CustomerUploadRequestDto;
 import ru.cource.priceorders.models.dto.CustomerUploadResponseDto;
 import ru.cource.priceorders.service.CustomerUploadService;
 
+import java.util.List;
+import java.util.UUID;
+
 /**
- * Integration API (1C): загрузка клиентов (customer) и адресов их торговых точек.
+ * Integration API (1C): загрузка внешних идентификаторов клиентов поставщика.
  */
 @RestController
 @Validated
@@ -23,7 +27,10 @@ public class CustomerUploadIntegrationController {
   private final CustomerUploadService service;
 
   @PostMapping()
-  public CustomerUploadResponseDto upload(@RequestBody @NotNull CustomerUploadRequestDto request) {
-    return service.upload(request);
+  public CustomerUploadResponseDto upload(
+      @RequestHeader("secretWord") @NotNull UUID supplierId,
+      @RequestBody @NotNull List<CustomerUploadRequestDto> request
+  ) {
+    return service.upload(supplierId, request);
   }
 }

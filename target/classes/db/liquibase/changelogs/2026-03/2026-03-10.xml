@@ -29,9 +29,7 @@
                                       id uuid PRIMARY KEY,
                                       name varchar(200) NOT NULL,
                                       inn varchar(20) NOT NULL,
-                                      kpp varchar(50),
-                                      system_guid uuid,
-                                      CONSTRAINT unique_customer_system_guid UNIQUE (system_guid)
+                                      kpp varchar(50)
             );
         </sql>
     </changeSet>
@@ -87,7 +85,7 @@
                                                   id uuid PRIMARY KEY,
                                                   customer_id uuid NOT NULL,
                                                   supplier_id uuid NOT NULL,
-                                                  customer_external_guid uuid NOT NULL,
+                                                  customer_external_id uuid NOT NULL,
 
                                                   CONSTRAINT uq_customer_external_id_customer_supplier UNIQUE (customer_id, supplier_id),
 

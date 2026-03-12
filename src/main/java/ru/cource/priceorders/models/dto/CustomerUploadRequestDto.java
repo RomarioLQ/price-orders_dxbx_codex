@@ -5,53 +5,25 @@ import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
- * Запрос на загрузку клиентов (customer) и их адресов торговых точек (address).
- * Используется интеграцией (обработка 1С).
+ * Элемент запроса на сопоставление клиента поставщика с внутренним customer.
  */
 @Value
 @Builder
 @Jacksonized
 public class CustomerUploadRequestDto {
 
-  @JsonProperty("customers")
-  List<CustomerDto> customers;
+  /**
+   * GUID клиента в учетной системе поставщика.
+   */
+  @JsonProperty("id")
+  UUID customerExternalId;
 
-  @Value
-  @Builder
-  @Jacksonized
-  public static class CustomerDto {
+  @JsonProperty("inn")
+  String inn;
 
-    /**
-     * GUID клиента в учетной системе поставщика.
-     */
-    @JsonProperty("system_guid")
-    UUID systemGuid;
-
-    @JsonProperty("name")
-    String name;
-
-    @JsonProperty("inn")
-    String inn;
-
-    @JsonProperty("kpp")
-    String kpp;
-
-    /**
-     * Адреса торговых точек клиента.
-     */
-    @JsonProperty("addresses")
-    List<AddressDto> addresses;
-  }
-
-  @Value
-  @Builder
-  @Jacksonized
-  public static class AddressDto {
-    @JsonProperty("address")
-    String address;
-  }
+  @JsonProperty("kpp")
+  String kpp;
 }

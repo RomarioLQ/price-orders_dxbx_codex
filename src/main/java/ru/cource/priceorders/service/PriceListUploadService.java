@@ -11,7 +11,6 @@ import ru.cource.priceorders.dao.SupplierRepository;
 import ru.cource.priceorders.exception.common.NotFoundException;
 import ru.cource.priceorders.exception.common.ValidationException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
-import ru.cource.priceorders.models.Customer;
 import ru.cource.priceorders.models.Nomenclature;
 import ru.cource.priceorders.models.PriceList;
 import ru.cource.priceorders.models.PricePosition;
@@ -67,17 +66,7 @@ public class PriceListUploadService {
     Boolean isActive = Optional.ofNullable(plDto.getIsActive())
         .orElseThrow(() -> validation("price_list.is_active", "is_active is required"));
 
-    UUID customerId = Optional.ofNullable(plDto.getCustomerSystemGuid())
-        .map(customerSystemGuid -> customerRepository.findFirstBySystemGuid(customerSystemGuid)
-            .orElseThrow(() -> new NotFoundException(
-                "CUSTOMER_NOT_FOUND",
-                traceIdGenerator.gen(),
-                "Customer is not found",
-                null,
-                List.of(ParamDto.builder().key("customerSystemGuid").value(customerSystemGuid.toString()).build())
-            )))
-        .map(Customer::getId)
-        .orElse(null);
+    UUID customerId = resolveCustomerId(plDto.getCustomerSystemGuid());
 
     UUID priceId = UUID.randomUUID();
 
@@ -174,6 +163,24 @@ public class PriceListUploadService {
         .createdNomenclature(createdNomenclature.get())
         .positions(pricePositionsToSave.size())
         .build();
+  }
+
+  private UUID resolveCustomerId(UUID customerId) {
+    return Optional.ofNullable(customerId)
+        .map(this::getExistingCustomerId)
+        .orElse(null);
+  }
+
+  private UUID getExistingCustomerId(UUID customerId) {
+    return customerRepository.findById(customerId)
+        .orElseThrow(() -> new NotFoundException(
+            "CUSTOMER_NOT_FOUND",
+            traceIdGenerator.gen(),
+            "Customer is not found",
+            null,
+            List.of(ParamDto.builder().key("customerId").value(customerId.toString()).build())
+        ))
+        .getId();
   }
 
   private ValidationException validation(String key, String message) {
