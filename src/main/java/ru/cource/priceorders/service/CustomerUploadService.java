@@ -4,13 +4,11 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import ru.cource.priceorders.dao.AddressRepository;
-import ru.cource.priceorders.dao.CustomerAddressAccessRepository;
 import ru.cource.priceorders.dao.CustomerRepository;
 import ru.cource.priceorders.exception.common.ValidationException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
 import ru.cource.priceorders.models.Address;
 import ru.cource.priceorders.models.Customer;
-import ru.cource.priceorders.models.CustomerAddressAccess;
 import ru.cource.priceorders.models.dto.CustomerUploadRequestDto;
 import ru.cource.priceorders.models.dto.CustomerUploadResponseDto;
 import ru.dxbx.common.dto.error.ParamDto;
@@ -33,7 +31,6 @@ public class CustomerUploadService {
 
   private final CustomerRepository customerRepository;
   private final AddressRepository addressRepository;
-  private final CustomerAddressAccessRepository customerAddressAccessRepository;
   private final TraceIdGenerator traceIdGenerator;
 
   @Transactional
@@ -46,7 +43,6 @@ public class CustomerUploadService {
     AtomicInteger createdCustomers = new AtomicInteger(0);
     AtomicInteger updatedCustomers = new AtomicInteger(0);
     AtomicInteger createdAddresses = new AtomicInteger(0);
-    AtomicInteger createdLinks = new AtomicInteger(0);
 
     Set<UUID> requestGuids = new HashSet<>();
 
@@ -107,33 +103,29 @@ public class CustomerUploadService {
 
           List<CustomerUploadResponseDto.AddressResultDto> resultAddresses = addressDtos.stream()
               .filter(Objects::nonNull)
-              .map(a -> Optional.ofNullable(a.getAddress()).orElse("").trim())
-              .filter(addressText -> !addressText.isBlank())
+              .map(a -> toAddressCandidate(a))
               .distinct()
-              .map(addressText -> {
-                Address address = addressRepository.findFirstByAddress(addressText)
+              .map(candidate -> {
+                Address address = addressRepository.findFirstByCustomerIdAndAdditionalId(savedCustomer.getId(), candidate.additionalId())
                     .orElseGet(() -> {
                       Address created = new Address();
                       created.setId(UUID.randomUUID());
-                      created.setAddress(addressText);
+                      created.setCustomerId(savedCustomer.getId());
+                      created.setAdditionalId(candidate.additionalId());
                       createdAddresses.incrementAndGet();
                       return created;
                     });
 
-                Address savedAddress = addressRepository.save(address);
+                address.setName(candidate.name());
+                address.setKpp(candidate.kpp());
 
-                if (!customerAddressAccessRepository.existsByCustomerIdAndAddressId(savedCustomer.getId(), savedAddress.getId())) {
-                  CustomerAddressAccess link = new CustomerAddressAccess();
-                  link.setId(UUID.randomUUID());
-                  link.setCustomerId(savedCustomer.getId());
-                  link.setAddressId(savedAddress.getId());
-                  customerAddressAccessRepository.save(link);
-                  createdLinks.incrementAndGet();
-                }
+                Address savedAddress = addressRepository.save(address);
 
                 return CustomerUploadResponseDto.AddressResultDto.builder()
                     .id(savedAddress.getId())
-                    .address(savedAddress.getAddress())
+                    .additionalId(savedAddress.getAdditionalId())
+                    .name(savedAddress.getName())
+                    .kpp(savedAddress.getKpp())
                     .build();
               })
               .toList();
@@ -153,9 +145,24 @@ public class CustomerUploadService {
         .createdCustomers(createdCustomers.get())
         .updatedCustomers(updatedCustomers.get())
         .createdAddresses(createdAddresses.get())
-        .createdCustomerAddressLinks(createdLinks.get())
         .customers(resultCustomers)
         .build();
+  }
+
+  private record AddressUpsertCandidate(String additionalId, String name, String kpp) {
+  }
+
+  private AddressUpsertCandidate toAddressCandidate(CustomerUploadRequestDto.AddressDto addressDto) {
+    String additionalId = Optional.ofNullable(addressDto.getAdditionalId()).orElse("").trim();
+    if (additionalId.isBlank()) {
+      throw validation("customers.addresses.additional_id", "additional_id is required");
+    }
+
+    return new AddressUpsertCandidate(
+        additionalId,
+        Optional.ofNullable(addressDto.getName()).map(String::trim).filter(s -> !s.isBlank()).orElse(null),
+        Optional.ofNullable(addressDto.getKpp()).map(String::trim).filter(s -> !s.isBlank()).orElse(null)
+    );
   }
 
   private ValidationException validation(String field, String message) {

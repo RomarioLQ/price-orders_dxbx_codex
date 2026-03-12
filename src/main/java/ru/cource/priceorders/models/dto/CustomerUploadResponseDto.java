@@ -27,9 +27,6 @@ public class CustomerUploadResponseDto {
   @JsonProperty("created_addresses")
   int createdAddresses;
 
-  @JsonProperty("created_customer_address_links")
-  int createdCustomerAddressLinks;
-
   @JsonProperty("customers")
   List<CustomerResultDto> customers;
 
@@ -63,7 +60,13 @@ public class CustomerUploadResponseDto {
     @JsonProperty("id")
     UUID id;
 
-    @JsonProperty("address")
-    String address;
+    @JsonProperty("additional_id")
+    String additionalId;
+
+    @JsonProperty("name")
+    String name;
+
+    @JsonProperty("kpp")
+    String kpp;
   }
 }

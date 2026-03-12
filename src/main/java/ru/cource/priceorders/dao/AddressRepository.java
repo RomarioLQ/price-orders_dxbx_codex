@@ -12,20 +12,20 @@ import java.util.UUID;
 
 public interface AddressRepository extends JpaRepository<Address, UUID> {
 
-  Optional<Address> findFirstByAddress(String address);
+  Optional<Address> findFirstByCustomerIdAndAdditionalId(UUID customerId, String additionalId);
 
   @Query(value = """
       SELECT
         a.id AS id,
-        a.address AS address
-      FROM customer_address_access caa
-      JOIN address a ON a.id = caa.address_id
-      WHERE caa.customer_id = :customerId
+        COALESCE(a.name, a.additional_id) AS address
+      FROM address a
+      WHERE a.customer_id = :customerId
         AND (
              :searchString IS NULL OR :searchString = ''
-             OR a.address ILIKE CONCAT('%', :searchString, '%')
+             OR COALESCE(a.name, '') ILIKE CONCAT('%', :searchString, '%')
+             OR a.additional_id ILIKE CONCAT('%', :searchString, '%')
         )
-      ORDER BY a.address
+      ORDER BY COALESCE(a.name, a.additional_id)
       LIMIT :limit
       """, nativeQuery = true)
   List<CustomerAddressSearchSelectProjection> searchSelect(

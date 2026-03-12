@@ -10,7 +10,7 @@ import lombok.Setter;
 import java.util.UUID;
 
 /**
- * Адрес точки клиента.
+ * Адрес торговой точки клиента.
  */
 @Getter
 @Setter
@@ -22,6 +22,21 @@ public class Address {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "address", nullable = false, length = 500)
-  private String address;
+  @Column(name = "customer_id", nullable = false)
+  private UUID customerId;
+
+  /**
+   * Внешний идентификатор адреса в учетной системе.
+   */
+  @Column(name = "additional_id", nullable = false, length = 500)
+  private String additionalId;
+
+  /**
+   * Отображаемое наименование/адрес торговой точки.
+   */
+  @Column(name = "name", length = 1000)
+  private String name;
+
+  @Column(name = "kpp", length = 50)
+  private String kpp;
 }

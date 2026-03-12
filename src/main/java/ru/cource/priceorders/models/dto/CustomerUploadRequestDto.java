@@ -51,7 +51,13 @@ public class CustomerUploadRequestDto {
   @Builder
   @Jacksonized
   public static class AddressDto {
-    @JsonProperty("address")
-    String address;
+    @JsonProperty("additional_id")
+    String additionalId;
+
+    @JsonProperty("name")
+    String name;
+
+    @JsonProperty("kpp")
+    String kpp;
   }
 }

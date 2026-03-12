@@ -36,7 +36,7 @@ public class CustomerAddressSearchSelectService {
     return rows.stream()
         .map(r -> CustomerAddressSearchSelectResponseDto.builder()
             .id(r.getId())
-            .address(r.getAddress())
+            .address(Optional.ofNullable(r.getAddress()).orElse(""))
             .build())
         .toList();
   }

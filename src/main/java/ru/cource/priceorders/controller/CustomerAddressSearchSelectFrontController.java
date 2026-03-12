@@ -16,6 +16,7 @@ import java.util.List;
 
 /**
  * Front API: search-select адресов клиента (по Telegram initData).
+ * Возвращает только адреса, принадлежащие customer текущего пользователя.
  */
 @RestController
 @RequestMapping("/front/price-orders/v1/addresses")
