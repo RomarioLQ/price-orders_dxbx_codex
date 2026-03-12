@@ -60,9 +60,7 @@
             CREATE TABLE address (
                                      id uuid PRIMARY KEY,
                                      customer_id uuid NOT NULL,
-                                     additional_id varchar(500) NOT NULL,
                                      name varchar(1000),
-                                     kpp varchar(50),
                                      FOREIGN KEY (customer_id) REFERENCES customer(id)
             );
 
