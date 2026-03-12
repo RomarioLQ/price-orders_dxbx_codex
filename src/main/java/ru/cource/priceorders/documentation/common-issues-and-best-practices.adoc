@@ -1,0 +1,482 @@
+:toc:
+:toclevels: 1
+:toc-title: Оглавление
+:sectnums:
+
+= Ревью: Распространённые проблемы и лучшие практики
+
+Таблица с метаинформацией::
+
+[cols="~,~"]
+|===
+s|Авторы          |Брылевский Михаил
+s|Дата создания   |01.09.2025
+s|Дата обновления |01.09.2025
+s|Статус          |[blue]#Живой документ#
+|===
+
+[#dto-and-lombok]
+== Оформление DTO и Params классов, Lombok аннотации
+
+[underline]#Цель:# единый стиль и иммутабельность DTO/params.
+
+[underline]#Решение:# по умолчанию используем класс с Lombok аннотациями
+`@Value @Builder(toBuilder = true) @Jacksonized`.
+
+[NOTE]
+====
+Почему не `record` по умолчанию?
+Он менее гибок в перспективе:
+
+* `record` фиксирует набор полей на уровне конструктора, добавление опционального поля требует рефакторинга по месту использования, Lombok решает проблему через `@Builder.Default`;
+* c `record` сложнее наращивать поведение (валидация, вычисляемые поля, дефолты, кеширование);
+* `record`  не предоставляет builder-подход и некоторые другие паттерны.
+
+Если есть веская причина — `record` допустим, но лучше его избегать.
+====
+
+=== Правила
+
+. DTO/Params-классы должны быть неизменяемыми: используем `@Value` (закрытые final-поля, геттеры, `equals/hashCode/toString`).
+. Строим через `@Builder(toBuilder = true)`.
+По-умолчанию используем `toBuilder = true`.
+Для JSON-(де)сериализации добавляем `@Jacksonized`.
+. Порядок аннотаций и видимость: `@Value`, затем `@Builder`, затем `@Jacksonized`.
+. Конструкторы наружу не раскрываем (сочетание `@Value` и `@Builder` даёт package-private конструктор).
+. Статические фабрики допустимы для читаемости: `empty()`, `of(...)`, `from(Domain)`.
+Внутри — делегирование на builder.
+. Коллекции в DTO — только неизменяемые.
+При необходимости используем `@Builder.Singular`.
+. Опциональные поля делаем с `@Builder.Default`.
+. Что *избегаем*: `record`, `@Data`, сеттеры
+. Что *запрещено*: публичные поля, DTO с бизнес-логикой.
+
+[NOTE]
+====
+Почему с `toBuilder = true` по-умолчанию?
+Мутировать объекты типа DTO или Params действительно нужно редко и в основном в тестах, но когда появляется необходимость, то приходится вносить правки в существующие классы добавляя `toBuilder = true`, для кода в том же репозитории это обычно не проблема, а вот править библиотечный код, поднимать и выпускать версию хочется не всегда. Поэтому для большей универсальности и минимизации будущих отвлечений делаем сразу с `toBuilder = true`.
+====
+
+=== Пример
+
+[source,java]
+----
+@Value
+@Builder(toBuilder = true)
+@Jacksonized
+public class SomeDto {
+  String id;
+  String name;
+
+  @Builder.Default
+  String type = "DEFAULT_TYPE";
+
+  @Singular
+  List<String> tags;
+
+  public static SomeDto empty() {
+    return SomeDto.builder().build();
+  }
+}
+----
+
+=== Частые ошибки
+
+* Забыли `@Jacksonized` -> Jackson не может десериализовать через builder.
+* `@Data` вместо `@Value` -> теряем иммутабельность.
+* Мутабельные коллекции в полях -> побочные эффекты.
+* Статическая фабрика создаёт объект в обход builder и нарушает инварианты.
+
+=== Обсуждения на ревью
+
+* https://gitlab.dxbx.ru/dxbx/dxbx/-/merge_requests/5284#note_96780
+
+[#crud-optional-exceptions]
+== CRUD методы, Optional и выброс исключения
+
+[underline]#Цель:# убрать дублирование выброса исключений и дать гибкий API для "нашлось/не нашлось".
+
+[underline]#Решение:# поддерживаем *пару методов* на сервисном слое:
+`findByXxx(..) -> Optional<T>` и `getByXxx(..) -> T` (бросает доменное исключение, если не найдено).
+
+[NOTE]
+====
+Зачем пара `findBy...` и `getBy...`?
+
+* В ветках, где отсутствие допустимо, используем `findBy...`.
+* Там, где сущность обязана существовать, вызываем `getBy...` — включающий централизованный `orElseThrow(...)`.
+Это исключает дублирование `if (isEmpty) throw ...` по коду.
+* Позволяют не дублировать типовую генерацию исключения "... не найдено" в бизнес-логике, тем самым повышая читаемость и поддерживаемость не теряя гибкость.
+====
+
+=== Правила
+
+. **Именование и контракты: Одиночные записи**
+.. `findByXxx(...) -> Optional<T>` — с необязательным возвращаемым значением.
+По умолчанию используем `Optional`, в особых случаях допустимо использовать `null`.
+.. `getByXxx(...) -> T` — оборачивает `findByXxx` и бросает *доменное* `...NotFoundException`.
+. **Именование и контракты: Коллекции**
+.. `findAllByXxx(...) -> List<T>` - не бросает исключение, отдаёт коллекцию с тем что есть, в том числе пустую.
+Используется для поиска с необязательным или непредсказуемым результатом, например, ищем по статусу.
+.. `getAllByXxx(...) -> List<T>` - бросает исключение если что-то не удалось найти.
+Используем для поиска с обязательным и предсказуемым результатом, например, ищем по списку id.
+.. Избегаем многократные вызовы обычных `findBy...` или `getBy...` при работе с коллекциями.
+.. Не используем `Optional<List<T>>` — для коллекций возвращаем пустую коллекцию.
+. **Исключения**
+.. Отсутствие сущности — это *бизнес-ошибка* уровня CRUD (напр., `AccountNotFoundException`), маппится в 404/`ACCOUNT_NOT_FOUND`.
+.. Проблемы инфраструктуры (БД недоступна и т.п.) — *техническая* ошибка (500), их не маскируем.
+.. Избегаем использования "широких" исключений типа `NotFoundException` или `CrudException`, используем исключение "не найдено" под конкретную сущность , например: `AccountNotFoundException`.
+. **Иные договорённости**
+.. Избегаем `getBy...` с возможным `null` — это нарушение контракта.
+.. Сообщение исключения должно содержать ключевые атрибуты поиска (id/внешний ключ) для трассировки.
+
+=== Пример
+
+[source,java]
+----
+@Repository
+public interface DocumentRepository {
+  Optional<Document> findById(UUID id);
+  List<Document> findAllByIdIn(Collection<UUID> ids);
+  List<Document> findAllByStatus(Status status);
+}
+
+public class DocumentNotFoundException extends NotFoundException {
+  public DocumentNotFoundException(String code, String message, Map<String, String> params) {
+    super(code, message, params);
+  }
+
+  private static final String BY_ID_MESSAGE = "Document not found by id '%s'";
+
+  private static final String BY_IDS_MESSAGE = "Document not found by ids: %s";
+
+  public static DocumentNotFoundException byId(UUID id) {
+    return new DocumentNotFoundException(
+        ErrorCode.DOCUMENT_NOT_FOUND_EXCEPTION.name(),
+        BY_ID_MESSAGE.formatted(id),
+        Map.of("id", id.toString())
+    );
+  }
+
+  public static DocumentNotFoundException byIds(Collection<UUID> ids) {
+    return new DocumentNotFoundException(
+        ErrorCode.DOCUMENT_NOT_FOUND_EXCEPTION.name(),
+        BY_IDS_MESSAGE.formatted(ids),
+        Map.of("ids", StringUtils.join(ids, ", "))
+    );
+  }
+}
+
+@Service
+@RequiredArgsConstructor
+public class DocumentService {
+  private final DocumentRepository repository;
+
+  // Строгий поиск по идентификатору
+  public Document getById(UUID id) {
+    return findById(id).orElseThrow(() -> DocumentNotFoundException.byId(id));
+  }
+
+  // Мягкий поиск по идентификатору
+  public Optional<Document> findById(UUID id) {
+    return repository.findById(id);
+  }
+
+  // Строгий поиск по списку идентификаторов
+  public List<Document> getAllByIds(Collection<UUID> ids) {
+    var result = findAllByIds(ids);
+    // опционально, можно проверять соответствие списку идентификаторов, но зачастую избыточно
+    if (result.size() < ids.size()) {
+      throw DocumentNotFoundException.byIds(ids);
+    }
+    return result;
+  }
+
+  // Мягкий поиск по списку идентификаторов
+  public List<Document> findAllByIds(Collection<UUID> ids) {
+    return repository.findAllByIdIn(ids);
+  }
+
+  // Мягкий поиск по статусу
+  public List<Document> findAllByStatus(Status status) {
+    return repository.findAllByStatus(status);
+  }
+}
+----
+
+=== Частые ошибки
+
+* Дублирование `orElseThrow(...)` в каждом месте использования вместо единого `getBy...`.
+* Генерик-исключения (`NotFoundException`, `EntityNotFoundException`) вместо доменных (`AccountNotFoundException`).
+* `getBy...` возвращает `Optional` или `null`  — контракты смешаны.
+* Логика поиска/валидации размазана по контроллерам, а не сосредоточена в сервисе.
+* N вызовов `findBy...` или `getBy...` вместо специализированных `findAllBy...` или `getAllBy...`
+
+=== Обсуждения на ревью
+
+* https://gitlab.dxbx.ru/dxbx/dxbx/-/merge_requests/5284#note_96778
+
+[#exception-hierarchy]
+== Иерархия исключений
+
+[underline]#Цель:# единый подход работы с ошибками, единый базовый класс для исключений приложения, информативность, удобная иерархия для перехвата и обработки исключений.
+
+[underline]#Решение:# один корневой тип `ApplicationException` (поля: `code`, `traceId`, `params`).
+Дочерние исключения наследуются напрямую или через узкие "промежуточные" типы (например, `NotFoundException`).
+
+[NOTE]
+====
+Классификацию и представление наружу делает *обработчик на границе* (контроллер/консьюмер/листенер): он читает
+`code`, `message`, `traceId`, `params` и уже решает, как это логировать/возвращать.
+Иерархия исключений от этого не зависит.
+====
+
+=== Правила
+
+. Все проектные исключения наследуют `ApplicationException`.
+. `code` — код ошибки, стабильный, человеко-читаемый, в `UPPER_SNAKE_CASE` (напр., `DOCUMENT_NOT_FOUND`, `VALIDATION_FAILED`).
+. `message` - сообщение об ошибке — коротко "что случилось" с упоминанием идентификаторов или иной полезной информации для локализации проблемы.
+. `params` - связанные параметры для машинной обработки: идентификаторы, ключи, статусы, состояния.
+Не кладём чувствительные данные.
+. Не делаем "log-and-throw": логируем *на границе* один раз, прикладывая `traceId` и `params`.
+. Если оборачиваем чужое исключение — *всегда прокидываем* `cause`, *нельзя терять стектрейс* ни при каких обстоятельствах.
+. Для повторяющихся кейсов делаем фабрики `byId(...)`, `byKey(...)`, чтобы унифицировать `code`, `message` и `params`, а также, чтобы снизить визуальный шум в логике выброса исключения.
+. По возможности избегаем checked исключений, не тащим через сигнатуру, оборачиваем в unchecked или обрабатываем по месту.
+. Избегаем использования `@SneakyThrows`, допустимо в тестах, но опасно в продакшен коде.
+
+[WARNING]
+====
+Почему `@SneakyThrows` опасен для продакшена?
+
+Некоторые библиотеки обрабатывающие исключения могут checked обрабатывать иначе или вовсе игнорировать, ожидая, что checked до них дойти не может, т.к. его обязан обработать пользовательский код.
+
+*Пример:*
+Транзакции Spring по-умолчанию откатываются только на unchecked. Если прокинуть IOException через @SneakyThrows, в рантайме это останется IOException и *rollback не произойдёт*, если это явно не настроить.
+====
+
+=== Пример базового исключения на всё приложение
+
+[source,java]
+----
+@Getter
+public abstract class ApplicationException extends RuntimeException {
+  public static final String MESSAGE_PARAM = "message";
+  public static final String MDC_TRACE_ID_PARAM = "traceId";
+  public static final String MDC_TRACE_ID_ALT_PARAM = "trace_id";
+
+  @NonNull
+  private final String code;
+  private final String traceId;
+  private final Map<String, String> params;
+
+  protected ApplicationException(String code, String message) {
+    this(code, message, null, null);
+  }
+
+  protected ApplicationException(String code, String message, Throwable cause) {
+    this(code, message, cause, null);
+  }
+
+  protected ApplicationException(String code, String message, Map<String, String> params) {
+    this(code, message, null, params);
+  }
+
+  /**
+   * Создает исключение с кодом, сообщением, причиной и дополнительными параметрами
+   *
+   * @param code    код ошибки
+   * @param message сообщение об ошибке
+   * @param cause   причина исключения
+   * @param params  дополнительные параметры
+   */
+  protected ApplicationException(@NonNull String code, String message, Throwable cause, Map<String, String> params) {
+    super(message, cause);
+    var actualParams = new HashMap<String, String>();
+    if (params != null) {
+      actualParams.putAll(params);
+    }
+    if (message != null && !actualParams.containsKey(MESSAGE_PARAM)) {
+      actualParams.put(MESSAGE_PARAM, message);
+    }
+    var traceId = MDC.get(MDC_TRACE_ID_PARAM);
+    if (traceId == null || traceId.isBlank()) {
+      traceId = MDC.get(MDC_TRACE_ID_ALT_PARAM);
+    }
+    this.code = code;
+    this.traceId = traceId;
+    this.params = Collections.unmodifiableMap(actualParams);
+  }
+}
+----
+
+=== Пример промежуточного (маркерного) исключения
+
+[source,java]
+----
+public abstract class NotFoundException extends ApplicationException {
+  protected NotFoundException(String code, String message) { super(code, message); }
+  protected NotFoundException(String code, String message, Map<String, String> params) { super(code, message, params); }
+}
+----
+
+=== Пример конкретного исключения
+
+[source,java]
+----
+public final class DocumentNotFoundException extends NotFoundException {
+
+  public DocumentNotFoundException(String code, String message, Map<String, String> params) { super(code, message, params); }
+
+  private static final String BY_ID_MESSAGE = "Document not found by id '%s'";
+
+  public static DocumentNotFoundException byId(UUID id) {
+    return new DocumentNotFoundException(
+        ErrorCode.DOCUMENT_NOT_FOUND_EXCEPTION.name(),
+        BY_ID_MESSAGE.formatted(id),
+        Map.of("id", id.toString())
+    );
+  }
+}
+----
+
+=== Частые ошибки
+
+* Наследование напрямую от `RuntimeException` вместо `ApplicationException`.
+* Дублирование логирования: "поймал -> залогировал -> пробросил", а потом ещё раз на границе.
+* Разные формулировки и ключи в `params` для одного и того же кейса (нет фабрик).
+* Потеря `cause` при оборачивании — теряется стек и первопричина.
+* Случайные чувствительные данные в `params`.
+
+[#project-structure]
+== Структура проекта
+
+[underline]#Проблема:# отсутствует единая предсказуемная структура проекта и чёткие границы зависимостей, а бизнес и различные виды транспорта тесно переплетены.
+
+[underline]#Решение:# определённая иерархия пакетов с четырьмя корневыми слоями (`config`, `core`, `io`, `util`) с layer-first неймингом и определёнными границами зависимостей. Взаимодействие с `io` из `core` через `...Gateway`.
+
+=== Базовая структура
+
+[source,text]
+----
+- config        // конфигурации и бины
+- core          // доменная модель и бизнес-логика
+  - entity      // хранимые в БД доменные модели (сущности)
+  - model       // не хранимые в БД доменные модели (Params, Filter и т. д.)
+  - repository  // репозитории для доменных сущностей
+  - gateway     // интерфейсы для взаимодействия с io (а в io — реализации)
+  - service     // сервисы с бизнес-логикой
+  - exception   // исключения доменной области
+- io            // транспортная обвязка, каналы внешнего взаимодействия, Gateway-адаптеры
+  - client      // клиенты внешних систем
+  - controller  // контроллеры (REST, gRPC, MVC)
+  - messaging   // обмен сообщениями с шиной (Kafka, Rabbit и т. д.)
+- util          // независимые утилиты
+----
+
+=== Правила
+
+. **Базовый нейминг пакетов**
+.. Везде Layer-first подход: `*core.service*.payment`, `*core.entity*.invoice`, `*io.controller.mapper*.invoice`, `*io.client.sbis*.mapper` и т. п.
+.. Секции уровня именуем существительным в единственном числе.
+.. Всегда используем lowercase.
+.. Не используем `_`.
+.. Избегаем слишком длинных имён; допускаются понятные общепринятые аббревиатуры.
+
+. **Слой `config`**
+.. Содержит `@Configuration`, `@ConfigurationProperties` и другие конфигурации.
+.. `@Configuration` классы именуются с суффиксом `Config`: `SomeConfig`.
+.. `@ConfigurationProperties` классы — с суффиксом `Properties`: `SomeProperties`.
+.. Конфиги группируем в подпакеты по смыслу/технологии, например: `db`, `cache`, `scheduling`, `messaging`, `logging`, `metric`.
+.. Аннотации включения Spring-модулей `@Enable...` вешаем на `@Configuration` классы, избегаем навешивания на `Application` класс.
+
+. **Слой `core`**
+.. Содержит доменную модель и бизнес-логику.
+.. Делится на подпакеты по типу компонента: `entity`, `model`, `repository`, `gateway`, `service`, `exception`.
+.. Подпакеты могут быть разделены по поддомену или фиче, например: `core.entity.upd`, `core.service.upd`.
+
+. **Слой `io`**
+.. Содержит транспортную обвязку (контроллеры, клиенты, обмен сообщениями).
+.. Делится на подпакеты по типу канала: `controller`, `client`, `messaging`.
+.. Клиенты (`client`) делятся по внешним системам, например: `io.client.sbis`, `io.client.dxbx`.
+.. Каждый транспорт содержит свой необходимый набор пакетов: `dto`, `mapper`, `gateway`, `advice`.
+.. Подпакеты могут быть разделены по поддомену или фиче, например: `io.controller.dto.upd`, `io.messaging.dto.upd`.
+
+. **Слой `util`**
+.. Содержит доменно-независимые утилиты.
+.. Потенциально пригоден для вынесения в общую утилитарную библиотеку.
+
+. **Границы зависимостей**
+.. `config` — может использоваться всеми слоями (по необходимости).
+.. `core` — *не зависит от* `io`; при необходимости может зависеть от `config` и `util`.
+.. `io` — зависит от `core`; при необходимости может зависеть от `config` и `util`.
+.. `util` — *не зависит от* `config`/`core`/`io`.
+.. `core` взаимодействует с клиентами и продьюсерами из `io` по паттерну Gateway: в пакете `core.gateway` лежат интерфейсы `...Gateway` для взаимодействия с внешними системами, а в `io.client.gateway` и `io.messaging.gateway` — реализации `...GatewayAdapter`, которые связывают доменную модель с конкретным клиентом или продьюсером.
+
+. **Маппинг на границе**
+.. Весь транспортный маппинг — в `io.\*.mapper`. Сервисы принимают/возвращают только доменные модели (`core.model.\*`/`core.entity.\*`), не DTO.
+.. DTO храним рядом с транспортом (`io.controller.dto`, `io.client.<system>.dto`, `io.messaging.dto`), или в отдельной API библиотеке.
+
+=== Архитектурные тесты на ArchUnit (TODO, ещё не внедрено)
+
+Опционально можно использовать архитектурные тесты на ArchUnit. Пример от нейронки:
+
+[source,java]
+----
+package com.example.app.arch;
+
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+class ArchitectureRulesTest {
+
+  private static JavaClasses project;
+
+  @BeforeAll
+  static void beforeAll() {
+    project = new ClassFileImporter().importPackages("com.example.app");
+  }
+
+  @Test
+  void core_shouldNotDependOnIo() {
+    noClasses()
+        .that().resideInAPackage("..core..")
+        .should().dependOnClassesThat().resideInAnyPackage("..io..")
+        .check(project);
+  }
+
+  @Test
+  void util_shouldBeDependencyFree() {
+    noClasses()
+        .that().resideInAPackage("..util..")
+        .should().dependOnClassesThat()
+        .resideInAnyPackage("..core..", "..io..", "..config..")
+        .check(project);
+  }
+
+  @Test
+  void boundaryMappers_shouldDependOnlyOnAllowedPackages() {
+    var allowed = new String[] {
+        "java..", "jakarta..", "org.springframework..",
+        "..util..", "..core..", "..io.."
+    };
+    classes()
+        .that().resideInAnyPackage("..io.controller.mapper..", "..io.client..mapper..", "..io.messaging.mapper..")
+        .should().onlyDependOnClassesThat().resideInAnyPackage(allowed)
+        .check(project);
+  }
+}
+----
+
+=== Частые ошибки
+
+* `core` зависит от `io` (протекает транспорт в домен).
+* Смешение ролей: мапперы/DTO оказываются в `core`.
+* Несогласованный нейминг пакетов (множественное число, разный стиль).
+* `util` тянет доменные зависимости и перестаёт быть самостоятельным, а бизнес-логика "размазывается".
+* Конфиги раскиданы без смысловой группировки; `Properties` и `Config` путаются местами.
+* Дублирующиеся пакеты по смыслу, например `mapper` и `converter`.

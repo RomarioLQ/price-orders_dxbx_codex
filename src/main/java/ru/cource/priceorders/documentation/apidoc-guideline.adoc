@@ -1,0 +1,233 @@
+= Гайдлайн по API документации
+:toc:
+:toclevels: 3
+
+== Цель
+В этом гайдлайне рассмотрим как генерировать и пользоваться API документацией (OpenAPI и AsyncAPI). В конечном итоге придём к тому, что по каждому сервису есть актуальная API документацию и её можно просмотреть на нашем Backstage: https://dev-portal.dxbx.ru/
+
+=== Принципы
+Мы используем подход генерации документации из кода, так как в текущей команде разработки разработчиков гораздо больше, чем аналитиков, так что код пишется быстрее, чем API документация (которая зачастую и так пишется разработчиком).
+Так мы закрываем проблему актуальности документации и необходимости делать несколько изменений в разных репозиториях при изменении контракта. Где правишь код, там же и правишь документацию.
+
+=== Инструменты
+==== Спецификация
+. https://www.openapis.org/[OpenAPI] — стандарт для описания HTTP API
+. https://www.asyncapi.com/[AsyncAPI] — стандарт, с помощью которого описываются асинхронные API (в нашем случае Kafka)
+
+==== Библиотеки
+. https://springdoc.org/[Springdoc] — Spring библиотека для генерации OpenAPI на основе контроллеров и аннотаций. Тянется через dxbx-openapi-spring-boot-starter
+. https://springwolf.github.io/[Springwolf] — аналогичная библиотека, но для AsyncAPI. Находит в коде ваши продьюсеры и консьюмеры и генерирует на их основе документацию. Тянется через dxbx-asyncapi-spring-boot-starter
+. https://github.com/dnault/therapi-runtime-javadoc/[therapi-runtime] — работает как annotation processor на этапе компиляции, генерирует @Schema аннотации на основе javadoc комментариев и validation аннотаций. Внедряется во все DTO библиотеки через dxbx-lib-parent.
+
+==== GUI
+Для отображения архитектурной схемы продукта с возможностью просмотра API спецификации выбран https://backstage.io/[Backstage]. Настройка его компонентов выполняется через yaml репозиторий.
+
+== Как генерировать OpenAPI и AsyncAPI в своём сервисе
+Рассмотрим, как добавить генерацию API спецификации на примере usdo-documents-service.
+
+. Убедиться, что все DTO библиотеки добавлен https://gitlab.dxbx.ru/dxbx/common/dxbx-lib-parent/-/tags/[dxbx-lib-parent]
+[source,xml]
+<parent>
+  <groupId>ru.dxbx</groupId>
+  <artifactId>dxbx-lib-parent</artifactId>
+  <version>#актуальная_версия#</version>
+</parent>
+
+. Убедиться, что ru.dxbx.microservice.parent в сервисе обновлён до https://gitlab.dxbx.ru/dxbx/common/spring-common-parent/-/tags/[актуальной версии]
+
+. Если в сервисе есть REST API эндпоинты, то, чтобы генерировать OpenAPI, надо добавить https://gitlab.dxbx.ru/dxbx/common/starter/openapi-generate-starter/-/tags/[dxbx-openapi-spring-boot-starter] в сервис
+[source,xml]
+<dependency>
+  <groupId>ru.dxbx.starter</groupId>
+  <artifactId>dxbx-openapi-spring-boot-starter</artifactId>
+  <version>${dxbx-openapi-spring-boot-starter.version}</version>
+</dependency>
+
+. Если в сервисе есть Kafka взаимодействия, то, чтобы генерировать AsyncAPI, надо добавить https://gitlab.dxbx.ru/dxbx/common/starter/asyncapi-generate-starter/-/tags/[dxbx-asyncapi-spring-boot-starter] в сервис
+[source,xml]
+<dependency>
+  <groupId>ru.dxbx.starter</groupId>
+  <artifactId>dxbx-asyncapi-spring-boot-starter</artifactId>
+  <version>${dxbx-asyncapi-spring-boot-starter.version}</version>
+</dependency>
+
+. Чтобы сделать OpenAPI документацию более понятной и развёрнутой можно добавить аннотации `@Tag`, `@Operation`, `@ApiResponses`, `@Parameter`.
+[source,java]
+@RestController
+@RequestMapping(value = "usdo/documents")
+@Tag(name = "Document Batch Actions", description = "API для массовых операций с документами")
+public class DocumentBatchActionController {
+  /**
+   * Подтвердить пачку документов
+   *
+   * @param userId            id юзера
+   * @param confirmRequestDto dto массового подтверждения документов
+   */
+  @Operation(
+      summary = "Массовое подтверждение документов",
+      description = "Подтверждает несколько документов одновременно и возвращает результат операции для каждого документа"
+  )
+  @ApiResponses(value = {
+      @ApiResponse(
+          responseCode = "200",
+          description = "Все документы успешно подтверждены",
+          content = @Content(schema = @Schema(implementation = MultiResultResponseDto.class))
+      ),
+      @ApiResponse(
+          responseCode = "207",
+          description = "Частичный успех - некоторые документы не удалось подтвердить",
+          content = @Content(schema = @Schema(implementation = MultiResultResponseDto.class))
+      ),
+      @ApiResponse(responseCode = "400", description = "Некорректные параметры запроса",
+          content = @Content(schema = @Schema(implementation = ErrorResponseDto.class))),
+      @ApiResponse(responseCode = "403", description = "Недостаточно прав доступа",
+          content = @Content(schema = @Schema(implementation = ErrorResponseDto.class)))
+  })
+  @PostMapping("/confirm")
+  public ResponseEntity<MultiResultResponseDto<UUID, Void>> confirmDocuments(
+      @Parameter(description = "Идентификатор пользователя", required = true)
+      @RequestHeader(name = "X-USER") @NotNull UUID userId,
+      @Parameter(description = "Список идентификаторов документов для подтверждения", required = true)
+      @RequestBody DocumentBatchConfirmRequestDto confirmRequestDto
+  ) {
+    //...
+  }
+}
+
+. В AsyncAPI продьюсеры автоматически находятся, но всё же лучше не забывать аннотацию `@KafkaAsyncOperationBinding` и можно подробнее документировать через `@AsyncPublisher`
+[source,java]
+/**
+   * Отправляет документ в очередь Kafka.
+   * В качестве ключа сообщения используется идентификатор профиля ЭДО.
+   *
+   * @param document документ для отправки
+   */
+  @AsyncPublisher(
+      operation = @AsyncOperation(
+          channelName = "${usdo-documents-service.kafka.document-update-topic}",
+          description = "Отправка эвента об обновлении документа",
+          message = @AsyncMessage(
+              messageId = "DocumentUpdateMessage",
+              name = "Document Update",
+              title = "Обновление документа",
+              description = "Сообщение содержит данные документа для обновления. Ключ сообщения: document.edoProfileId"),
+          payloadType = DocumentModel.class
+      )
+  )
+  @KafkaAsyncOperationBinding
+  public void updateDocument(DocumentModel document) {
+    //...
+  }
+
+. Чтобы AsyncAPI документация заработала на консьюмере, надо добавить как минимум аннотацию `@KafkaAsyncOperationBinding`, а для подробной документации `@AsyncListener`
+[source,java]
+/**
+   * Обрабатывает полученный из Kafka документ.
+   *
+   * @param document документ для обработки
+   */
+  @AsyncListener(
+      operation = @AsyncOperation(
+          channelName = "${usdo-documents-service.kafka.document-update-topic}",
+          description = "Обработка обновлений документов для импорта и синхронизации",
+          payloadType = DocumentModel.class
+      )
+  )
+  @KafkaListener(topics = "${usdo-documents-service.kafka.document-update-topic}")
+  @KafkaAsyncOperationBinding
+  public void consume(DocumentModel document) {
+    //...
+  }
+
+. Если в API используются DTO, которые расположены не в библиотеке, а в сервисе, то по ним будет сгенерирована документация на основе JavaDoc комментариев (annotation processor подтягивается из парента)
+
+Готово! Теперь при запуске вашего сервиса можно будет получить документацию по HTTP:
+
+. OpenAPI: http://localhost:8080/v3/api-docs
+. AsyncAPI: http://localhost:8080/springwolf/docs
+
+== Как добавить мой сервис в Backstage
+Настройки Backstage лежат тут: https://gitlab.dxbx.ru/dxbx/devops/backstage-catalog
+
+. Создаем для своего сервиса новую папку, в нашем случае backstage/services/usdo-documents-service
+. В ней создаем файл catalog-info.yaml. Пример ниже.
+. Заполняем metadata для нашего сервиса
+. Если у сервиса есть OpenAPI, то через разделитель (---) добавляем в файл описание OpenAPI, а в исходном описании добавляем его в providesApis
+. Аналогично для AsyncAPI
+. Важно в описании API правильно указать `metadata.annotations."dxbx.ru/api-spec-url"`, именно по нему будет выполняться HTTP запрос на получение спецификации на одном из наших стейджей (сейчас это test-9)
+. Создаём MR и тэгаем @a.balandin или любого другого человека с правами на пуш в мастер
+. После этого раз в 5 минут скрипт будет ходить по указанному url и актуализировать документацию в Backstage.
+
+.Пример catalog-info.yml для usdo-documents-service
+[%collapsible]
+====
+[source,yaml]
+----
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: usdo-documents-service
+  title: Usdo Documents Service
+  description: Сервис реестра ЮЗЭДО документов
+  annotations:
+    backstage.io/source-location: url:https://gitlab.dxbx.ru/dxbx/usdo/usdo-documents-service/
+    gitlab.com/project-slug: gitlab.dxbx.ru/dxbx/usdo/usdo-documents-service
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - java
+    - spring-boot
+    - usdo
+spec:
+  type: service
+  lifecycle: production
+  owner: usdo-team
+  system: dxbx
+  providesApis:
+    - usdo-documents-rest-api
+    - usdo-documents-async-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: usdo-documents-rest-api
+  description: REST API сервиса Usdo Documents
+  annotations:
+    backstage.io/api-spec-location: spec/openapi.json
+    dxbx.ru/api-spec-url: http://usdo-documents-service:8080/v3/api-docs
+spec:
+  type: openapi
+  lifecycle: production
+  owner: usdo-team
+  system: dxbx
+  definition:
+    $text: spec/openapi.json
+  relations:
+    - type: apiProvidedBy
+      target:
+        kind: Component
+        name: usdo-documents-service
+        namespace: default
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: usdo-documents-async-api
+  description: Kafka взаимодействия сервиса Usdo Documents
+  annotations:
+    backstage.io/api-spec-location: spec/asyncapi.json
+    dxbx.ru/api-spec-url: http://usdo-documents-service:8080/springwolf/docs
+spec:
+  type: asyncapi
+  lifecycle: production
+  owner: usdo-team
+  system: dxbx
+  definition:
+    $text: spec/asyncapi.json
+  relations:
+    - type: apiProvidedBy
+      target:
+        kind: Component
+        name: usdo-documents-service
+        namespace: default
+----
+====

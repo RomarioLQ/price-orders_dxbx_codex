@@ -13,8 +13,8 @@
         <sql>
             CREATE TABLE system_users (
                                           id uuid PRIMARY KEY,
-                                          first_name varchar(50),
-                                          last_name varchar(50),
+                                          first_name varchar(255) NOT NULL,
+                                          last_name varchar(255),
                                           phone varchar(15),
                                           tg_user_id varchar(50) NOT NULL
             );
@@ -61,7 +61,7 @@
                                      id uuid PRIMARY KEY,
                                      customer_id uuid NOT NULL,
                                      additional_id varchar(500) NOT NULL,
-                                     name varchar(200),
+                                     name varchar(1000),
                                      kpp varchar(50),
                                      FOREIGN KEY (customer_id) REFERENCES customer(id)
             );

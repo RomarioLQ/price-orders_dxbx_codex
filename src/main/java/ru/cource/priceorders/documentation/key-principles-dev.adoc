@@ -1,0 +1,296 @@
+= Гайдлайн по ключевым принципам разработки 
+:toc:
+:toclevels: 3
+
+== Цель
+Добиться **ПРОСТОТЫ и ГИБКОСТИ** кода и, как следствие, повысить надежность и скорость разработки,  
+руководствуясь всего двумя ключевыми принципами:
+
+* **Закон Деметры (Law of Demeter)** — минимизация избыточных связей между компонентами
+* **SLAP (Single Level of Abstraction Principle)** — единый уровень абстракции внутри метода. Говоря простым языком – "Не смешивай бизнес-логику и технические детали в одном методе"
+
+=== 1. Закон Деметры (Law of Demeter) 
+
+Сервис или класс должен взаимодействовать **только со своими ближайшими зависимостями**  
+(с теми объектами, которые он напрямую знает).
+
+Иными словами:  
+Не лезь вглубь чужих объектов и не инжектируй то, что уже инкапсулировано в другом сервисе.
+
+Еще проще:
+Если сервис `А` взаимодействует с `B`, а `B` взаимодейстует с `C`, то `A` не должен напрямую взаимодействовать и даже знать про `C`. Если `A` что-то нужно из `C`, то `A` просит об этом `B` (своего соседа/друга) 
+
+image::image/law_of_demeter.jpg[Law of Demeter]
+
+=== 1.1 Закон Деметры. Пример нарушения 
+
+Разберем пример нарушения Закона Деметры на уровне зависимостей, который встречается при проектировании решений.
+
+[source,java]
+----
+
+public class StoreFacade {
+    private final ProductService productService;
+    private final ProductFacade productFacade;
+    ...
+}
+----
+[source,java]
+----
+public class ProductFacade {
+    private final ProductService productService;
+    private final ProductConverter converter;
+    ...
+}
+----
+
+`StoreFacade` напрямую взаимодействует с `ProductService`, при этом есть взаимодействие с `ProductFacade`, для которого `ProductService` внутренняя зависимость, что нарушает закон Деметры.
+
+Приведу пример продакшен-кода. Возьмем `EgaisActApiService`, в котором порядка 15(уже звоночек, сигнализирующий о "божественности" сервиса) заинжекченных сервисов. 
+Сразу бросается в глаза наличие `InvoiceService` и `InvoiceItemService`, потому что априори `invoiceItemService` является частью `InvoiceService` и только его.
+
+- EgaisActApiService → InvoiceService
+- EgaisActApiService → InvoiceItemService
+- EgaisActApiService → LegalPersonService
+- EgaisActApiService → EgaisServiceSync
+- EgaisActApiService → EgaisActOperationService
+
+[source,java]
+----
+public class EgaisActApiService {
+  private final EgaisActService egaisActService;
+  private final EgaisServiceSync egaisServiceSync;
+  private final AccessProfileService accessService;
+  private final EgaisActMapper egaisActMapper;
+  private final EgaisQuantitativeActCreateMapper egaisQuantitativeActCreateMapper;
+  private final EgaisActUpdateMapper egaisActUpdateMapper;
+  private final LegalPersonService legalPersonService;
+  private final InvoiceService invoiceService;
+  private final InvoiceItemService invoiceItemService;
+  private final EgaisActCreationService egaisActCreationService;
+  private final EgaisActSendJobService egaisActSendJobService;
+  private final EgaisActOperationService egaisActOperationService;
+  private final CommonEgaisConfigContext commonEgaisConfigContext;
+  private final EgaisActValidator egaisActValidator;
+  private final BlockingExecutionContext blockingExecutionContext;
+  private final SMMetrics smMetrics;
+  ...
+}
+----
+
+Взглянем на `EgaisServiceSyncImpl`, который заинжекчен в `EgaisActApiService` и увидем, что в нем дублируются инъекции `InvoiceItemService` и `InvoiceService`, `LegalPersonService`, а также имеется `Provider<EgaisServiceBundle> egaisServiceBundle`, который по коду делает следующее `egaisServiceBundle.get().getEgaisActService().update(egaisAct, user);` и тем самым у нас дублируется и `EgaisActService`. 
+
+`Provider` это отдельная боль, так как у нас используетя не как инструмент ленивой загрузки, а как хак для обхода циклических зависимостий 🙈🙈🙈
+
+- EgaisServiceSyncImpl → LegalPersonService (содержится в EgaisActApiService)
+- EgaisServiceSyncImpl → InvoiceItemService (содержится в EgaisActApiService)
+- EgaisServiceSyncImpl → InvoiceService (содержится в EgaisActApiService)
+- EgaisServiceSyncImpl → Provider<EgaisServiceBundle> → EgaisActService (содержится в EgaisActApiService)
+
+[source,java]
+----
+public class EgaisServiceSyncImpl implements EgaisServiceSync {
+  private final LegalPersonService legalPersonService;
+  private final EventLogService eventLogService;
+  private final InvoiceItemService invoiceItemService;
+  private final InvoiceItemBottleService invoiceItemBottleService;
+  private final InvoiceService invoiceService;
+  private final EventLogBundle eventLogBundle;
+  private final EgaisDtoConverter egaisDtoConverter;
+  private final Provider<EgaisServiceBundle> egaisServiceBundle;
+  private final BlockingExecutionContext blockingExecutionContext;
+  private final EgaisImportConfigContext egaisImportConfig;
+  private final MsgApi msgApi;
+  private final InvoiceStatusHistoryService invoiceStatusHistoryService;
+  private final RestsItemService restsItemService;
+  private final Clock clock;
+  private final User systemUser;
+  private final EgaisReceiptSenderHandler egaisReceiptSenderHandler;
+  private final UtmExchangeService utmExchangeService;
+  private final EgaisExceptionMarkValidator egaisExceptionMarkValidator;
+  private final EgaisSettingsService egaisSettingsService;
+  ...
+  egaisServiceBundle.get().getEgaisActService().update(egaisAct, user);
+  ...
+}
+----
+
+
+Теперь `EgaisActOperationService`. Данный сервис уже содержит `EgaisActService`, `EgaisActValidator`, которые присутствуют в `EgaisActApiService`. Отдельно стоит упомянуть `EgaisActItemService` и `EgaisActVolumeItemService` – c любыми *Item* должен взаимодействовать только корневой компонент, т.е. только `EgaisActService`, должен инжектить `EgaisActItemService`, а все другие кейсы это нарушение *Закона Деметры*
+
+- EgaisActOperationService → EgaisActService (содержится в EgaisActApiService)
+- EgaisActOperationService → EgaisActValidator (содержится в EgaisActApiService)
+- EgaisActOperationService → EgaisActItemService
+- EgaisActOperationService → EgaisActVolumeItemService
+
+[source,java]
+----
+public class EgaisActOperationService {
+  private final EgaisActService egaisActService;
+  private final EgaisActValidator egaisActValidator;
+  private final EgaisActItemService egaisActItemService;
+  private final EgaisActVolumeItemService egaisActVolumeItemService;
+  ...
+}
+----  
+
+Итого: имеем очень запутанную структуру связей и размытые ответственности сервисов. И это мы копнули только на 1 уровень ниже по дереву зависимостей.
+
+=== 1.2 Закон Деметры. К чему приводит нарушения
+
+* Увеличивается связанность и когнитивная сложность кода
+* Снижается устойчивость кода к изменениям. Эффект домино. При измении 1 сервиса требуется внести правки в N сервисов. Рефакторинг становится необъятным...
+* Дублируется ответственность, нарушается `SRP`
+
+Беспорядочные инъекции КРАТНО усложняют рефаторинг и тестирование кода.
+
+=== 1.3 Закон Деметры. Рекомендации
+
+* Каждый сервис/класс должен видеть и взаимодействовать только с соседними слоями, никаких прыжков через несколько слоёв
+* Оценивай границы сервисов/классов. Проверяй зависимости и взаимодействия на предмет дублирования ответственности и нарушения инкапсуляции
+* Доступ к Item имеет только корневой компонент. Нельзя инжектить условный InvoiceItemService! Инжектируй InvoiceService и пусть только в нём будет логика взаимодействия с айтемами
+* Закон Деметры актуален и применим для любых взаимодействий, как на уровне кода, так и на уровне архитектуры
+
+=== 2. SLAP 
+
+В одном методе не нужно смешивать `что делаем` (бизнес-логику) и `как именно делаем` (технические детали). 
+
+Иными словами:  
+Метод должен читаться как **последовательная бизнес-история**, а не как смесь бизнес-логики, проверок и технических деталей.
+
+=== 2.1 SLAP. Пример нарушения 
+
+Разберем пример нарушения SLAP:
+
+[source,java]
+----
+
+// ❌ В этом методе перемешаны уровни абстракции: получение и сохранение заказа, валидация, обработка ошибок, бизнес-логика сохрание в БД
+    public void processOrder(Long orderId) {
+
+        var orderOpt = orderService.findOrder(orderId);
+        if (!order.isPresent()) {
+            throw new OrderNotFoundException("Order not found");
+        }
+
+        var order = orderOpt.get();
+
+        if (order.getStatus() == OrderStatus.CLOSED || order.getStatus() == OrderStatus.DONE ||
+        order.getCreateDateTime().isBefore(LocalDateTime.now().minusHours(1))) {
+            throw new OrderStateException("Order cannot be edited");
+        }
+
+        var discount = discountCalculator.calculateDiscountBy(order.getCustomerId());
+
+        order.applyDiscount(discount);
+        order.setState(OrderStatus.AWAITING_PAYMENT);
+
+        orderService.save(order);
+    }
+
+----  
+
+Метод читается "рвано", требует фокусировки внимания даже на незначительных деталях, а бизнес-смысл теряется. Теперь отрефакторим 🪄:
+
+[source,java]
+----
+// ✅ Публичный метод читабелен и отражает бизнес-процесс "как историю"
+    public void processOrder(Long orderId) {
+
+        var order = getOrder(orderId);
+        validate(order);
+        var discount = calculateDiscount(order.getCustomerId());
+        applyDiscount(order, discount);
+        markAsAwaitingPayment(order);
+        save(order);
+
+    }
+
+    private Order getOrder(Long orderId) {
+        return orderService.findOrder(orderId).orElseThrow(() -> new NotFoundException());
+    }
+
+    private void validate(order) {
+        if (isTerminated(order)) {
+            throw new OrderStateException("Order cannot be edited");
+        }
+
+        if (isOrderExpired(order)) {
+            throw new OrderExpiredException("Order expired");
+        }
+    }
+
+    private boolean isTerminated(Order order) {
+        // лучше даже сделать order.isTerminated(), что будет соответствовать принципу Tell, Don't Ask, 
+        // но оставлю здесь для наглядности исходный вариант
+        return order.getStatus() == OrderStatus.CLOSED || order.getStatus() == OrderStatus.DONE;
+    }
+
+    private boolean isOrderExpired(Order order) {
+        return order.getCreateDateTime().isBefore(LocalDateTime.now().minusHours(1));
+    }
+
+    private BigDecimal calculateDiscount(Long customerId) {
+        return discountCalculator.calculateDiscountBy(customerId);
+    }
+
+    private void applyDiscount(Order order, BigDecimal discount) {
+        order.applyDiscount(discount);
+    }
+
+    private void markAsAwaitingPayment(Order order) {
+        order.setState(OrderStatus.AWAITING_PAYMENT);
+    }
+
+    private void save(Order order) {
+        orderService.save(order);
+    }
+----
+
+Теперь метод `processOrder` читается **как последовательность шагов бизнес-логики**:
+найти заказ → проверить заказ → рассчитать скидку → применить → изменить состояние → сохранить.
+
+* Все технические детали вынесены в приватные методы (вероятно в часть из них вам даже не придется смотреть при повторном открытии метода `processOrder`) 
+* Код приобрел свойство `самодокументируемости`. 
+* Код стал проще для чтения, понимания и отладки. Привет👋 принцип `KISS`. Теперь код может понять не только разработчик, но и любой аналитик/тестировщик и легко сопоставить код с требованиями
+* Каждый приватный метод говорит на том же языке домена (`заказ`, `скидка`, `ожидание оплаты`)
+
+Может показаться, что кода стало больше, но на практике вы не будете постоянно погружаться в каждый приватный метод. Также необязательно любое действие, например `order.setState(OrderStatus.AWAITING_PAYMENT);` выносить в отдельный метод, хотя имхо спустя время код с методами читается и воспринимается легче.
+
+=== 2.2 SLAP. К чему приводит нарушения принципа
+
+* Нельзя быстро увидеть, “что делает метод”, не вчитываясь в “как он это делает”. В одном месте смешаны бизнес-логика, проверки и технические детали
+* Код плохо переиспользуется — логика не разбита на самостоятельные операции. Полезные куски кода просто закопаны внутри больших методов, а значит высока вероятность дублирования → нарушается принцип `DRY` и `SRP`
+* Код требует комментариев – нет свойства `самодокументируемости`
+* Сложность поддержки. Приходится анализировать весь метод для мелких правок. Высокий риск внести ошибки
+* Сложный код — как правило, нерабочий код. Отлаживать и ревьють крайне затруднительно и долго
+* Сложный код — как правило, медленный код. Видеть узкие места и оптимизировать всё также крайне затруднительно и долго
+
+Коротко: Нарушение SLAP → монолитные методы → технический долг → замедление разработки.
+
+=== 2.3 SLAP. Рекомендации
+
+* SLAP позволяет дизайнить решение даже на псевдоКоде. Почти as is можно интерпретировать требования: _найти заказ → проверить заказ → рассчитать скидку → применить скидку → изменить состояние → сохранить_
+* С оговорками можно сказать, что SLAP это отображение(приземление) DDD, только на уровне кода 
+* SLAP прекрасно сочетается и взаимоусиливает синергию с принципами `DRY`, `SRP`, `KISS`, `Explicit is Better Than Implicit`, `Tell, Don't Ask`
+
+=== 3. Отступление
+
+В этом гайдлайне выбраны два ключевых принципа. Разумеется, принципов разработки ПО гораздо больше, и в документе упоминаются лучшие из них. Но именно `Закон Деметры` и `SLAP` дают реальный рычаг для достижения цели — простого и гибкого кода. Более того, они помогают естественно применять и другие принципы. 
+
+Почему не SOLID?
+Потому что за годы я не встречал двух разработчиков, одинаково понимающих все его буквы.
+Более того, сам автор — Роберт Мартин (Uncle Bob) — позже признал, что некоторые идеи он изначально трактовал слишком догматично и упрощённо.
+
+== 4. Итого
+
+Хороший код:
+
+* Просто понимать
+* Быстро изменять
+* Легко тестировать
+* Сложно сломать
+
+== 4.1 Итого. Послесловие
+
+Принципы разработки полезны как ориентиры, но главное — *здравый смысл*: решение должно быть простым, понятным и работать в реальном контексте.
