@@ -52,7 +52,7 @@ public class PriceListUploadRequestDto {
      * Опционально: customer_system_guid для клиентского прайса.
      * Если null - общий прайс.
      */
-    @JsonProperty("customer_system_guid")
+    @JsonProperty("customer_system_id")
     UUID customerSystemGuid;
   }
 

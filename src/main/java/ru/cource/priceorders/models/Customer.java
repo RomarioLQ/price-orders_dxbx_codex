@@ -30,10 +30,4 @@ public class Customer {
 
   @Column(name = "kpp")
   private String kpp;
-
-  /**
-   * GUID клиента в учетной системе поставщика.
-   */
-  @Column(name = "system_guid")
-  private UUID systemGuid;
 }
