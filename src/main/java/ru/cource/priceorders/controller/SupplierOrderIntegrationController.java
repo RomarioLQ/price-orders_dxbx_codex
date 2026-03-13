@@ -22,7 +22,7 @@ import java.util.UUID;
  * - подтверждение успешной выгрузки
  */
 @RestController
-@RequestMapping("/integration/price-orders/v1/orders")
+@RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 @Validated
 public class SupplierOrderIntegrationController {
@@ -31,10 +31,9 @@ public class SupplierOrderIntegrationController {
 
   @GetMapping("/unprocessed")
   public List<SupplierOrderUnprocessedResponseDto> getUnprocessed(
-      @RequestParam(value = "supplierId", required = false) UUID supplierId,
-      @RequestParam(value = "supplier_id", required = false) UUID supplierIdSnake
+      @RequestParam("supplierId") UUID supplierId
   ) {
-    return service.getUnprocessed(java.util.Optional.ofNullable(supplierId).orElse(supplierIdSnake));
+    return service.getUnprocessed(supplierId);
   }
 
   @PostMapping("/mark-uploaded")
