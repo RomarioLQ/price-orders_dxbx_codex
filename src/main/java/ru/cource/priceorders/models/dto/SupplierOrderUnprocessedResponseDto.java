@@ -29,6 +29,9 @@ public class SupplierOrderUnprocessedResponseDto {
   @JsonProperty("supplier_id")
   UUID supplierId;
 
+  @JsonProperty("address_id")
+  UUID addressId;
+
   @JsonProperty("user_id")
   UUID userId;
 

@@ -29,6 +29,9 @@ public class SystemOrder {
   @Column(name = "supplier_id", nullable = false)
   private UUID supplierId;
 
+  @Column(name = "address_id", nullable = false)
+  private UUID addressId;
+
   @Column(name = "user_id", nullable = false)
   private UUID userId;
 

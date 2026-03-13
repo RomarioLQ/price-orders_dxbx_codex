@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,15 +17,14 @@ import java.util.UUID;
 @Jacksonized
 public class OrderUploadRequestDto {
 
-  /**
-   * id заказа (используется как номер документа). В БД system_orders.id генерируется автоматически,
-   * а значение из этого поля сохраняется в system_orders.number.
-   */
-  @JsonProperty("id")
-  String id;
-
   @JsonProperty("supplier_id")
   UUID supplierId;
+
+  @JsonProperty("address_id")
+  UUID addressId;
+
+  @JsonProperty("datetime")
+  LocalDateTime datetime;
 
   @JsonProperty("items")
   List<OrderItemDto> items;
