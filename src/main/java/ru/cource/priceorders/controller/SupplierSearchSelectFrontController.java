@@ -18,7 +18,7 @@ import java.util.List;
  * Front API для динамического поиска поставщиков (search-select).
  */
 @RestController
-@RequestMapping("/front/price-orders/v1/suppliers")
+@RequestMapping("/api/v1/suppliers")
 @RequiredArgsConstructor
 @Validated
 public class SupplierSearchSelectFrontController {
