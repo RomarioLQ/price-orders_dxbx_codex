@@ -11,4 +11,6 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID> {
   Optional<SystemUser> findFirstByPhone(String phone);
 
   Optional<SystemUser> findFirstByTgUserId(String tgUserId);
+
+  boolean existsByTgUserIdAndIdNot(String tgUserId, UUID id);
 }

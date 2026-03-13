@@ -22,13 +22,13 @@ public class SystemUser {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "first_name")
+  @Column(name = "first_name", nullable = false, length = 255)
   private String firstName;
 
-  @Column(name = "last_name")
+  @Column(name = "last_name", length = 255)
   private String lastName;
 
-  @Column(name = "phone")
+  @Column(name = "phone", length = 15)
   private String phone;
 
   /**

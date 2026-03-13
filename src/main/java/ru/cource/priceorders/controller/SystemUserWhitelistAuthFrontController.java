@@ -1,6 +1,7 @@
 package ru.cource.priceorders.controller;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,11 @@ public class SystemUserWhitelistAuthFrontController {
    */
   @GetMapping("/whitelist-auth")
   public boolean whitelistAuth(
-      @RequestParam("phone") @NotBlank String phone,
+      @RequestParam("phone")
+      @NotBlank
+      @Size(max = 15)
+      @Pattern(regexp = "^\\+?[0-9]{11,15}$")
+      String phone,
       @RequestParam("tgUserId") @NotBlank @Size(max = 50) String tgUserId
   ) {
     long startedAt = System.currentTimeMillis();

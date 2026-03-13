@@ -20,15 +20,35 @@ public class SystemUserWhitelistAuthService {
 
   @Transactional
   public boolean authorize(String phone, String tgUserId) {
-    String normalizedPhone = Optional.ofNullable(phone).orElse("").trim();
+    String normalizedPhone = normalizePhone(phone);
     String normalizedTgUserId = Optional.ofNullable(tgUserId).orElse("").trim();
 
-    return systemUserRepository.findFirstByPhone(normalizedPhone)
-        .map(u -> {
-          u.setTgUserId(normalizedTgUserId);
-          systemUserRepository.save(u);
-          return true;
-        })
-        .orElse(false);
+    Optional<SystemUser> systemUser = systemUserRepository.findFirstByPhone(normalizedPhone);
+    if (systemUser.isEmpty()) {
+      return false;
+    }
+
+    SystemUser user = systemUser.get();
+    if (systemUserRepository.existsByTgUserIdAndIdNot(normalizedTgUserId, user.getId())) {
+      return false;
+    }
+
+    if (normalizedTgUserId.equals(user.getTgUserId())) {
+      return true;
+    }
+
+    user.setTgUserId(normalizedTgUserId);
+    systemUserRepository.save(user);
+    return true;
+  }
+
+  private String normalizePhone(String phone) {
+    return Optional.ofNullable(phone)
+        .orElse("")
+        .trim()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "");
   }
 }
