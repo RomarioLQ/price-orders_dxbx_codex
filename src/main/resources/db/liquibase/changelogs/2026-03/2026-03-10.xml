@@ -106,9 +106,9 @@
                                         id uuid PRIMARY KEY,
                                         supplier_id uuid NOT NULL,
                                         customer_id uuid,
+                                        datetime timestamp NOT NULL,
                                         start_date timestamp NOT NULL,
                                         end_date timestamp,
-                                        is_active boolean NOT NULL,
                                         FOREIGN KEY (supplier_id) REFERENCES supplier(id),
                                         FOREIGN KEY (customer_id) REFERENCES customer(id)
             );

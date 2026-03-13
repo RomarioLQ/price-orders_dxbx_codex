@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface PricePositionRepository extends JpaRepository<PricePosition, UUID> {
 
+  void deleteAllByPriceId(UUID priceId);
+
   @Query(value = """
       SELECT
         pp.price_id AS priceId,

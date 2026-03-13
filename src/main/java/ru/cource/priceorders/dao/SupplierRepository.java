@@ -17,15 +17,13 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
         s.name AS name
       FROM supplier s
       JOIN price_list pl ON pl.supplier_id = s.id
-      WHERE pl.is_active = true
-        AND (pl.customer_id = :customerId OR pl.customer_id IS NULL)
+      WHERE pl.customer_id = :customerId
         AND (
              :searchString IS NULL OR :searchString = ''
              OR s.name ILIKE CONCAT('%', :searchString, '%')
         )
       GROUP BY s.id, s.name
-      ORDER BY MAX(CASE WHEN pl.customer_id = :customerId THEN 1 ELSE 0 END) DESC,
-               s.name
+      ORDER BY s.name
       LIMIT :limit
       """, nativeQuery = true)
   List<SupplierSearchSelectProjection> searchSelectForCustomer(

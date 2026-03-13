@@ -9,6 +9,7 @@ import ru.cource.priceorders.dao.projection.PricePositionSearchSelectProjection;
 import ru.cource.priceorders.exception.common.NotFoundException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
 import ru.cource.priceorders.filter.TelegramUserData;
+import ru.cource.priceorders.models.PriceList;
 import ru.cource.priceorders.models.dto.PricePositionSearchSelectResponseDto;
 import ru.dxbx.common.dto.error.ParamDto;
 
@@ -60,12 +61,12 @@ public class PricePositionSearchSelectService {
   }
 
   private UUID resolveActivePriceListId(UUID supplierId, UUID customerId) {
-    return priceListRepository.findLatestActiveCustomerPriceListId(supplierId, customerId)
-        .or(() -> priceListRepository.findLatestActiveCommonPriceListId(supplierId))
+    return priceListRepository.findFirstBySupplierIdAndCustomerIdOrderByDatetimeDesc(supplierId, customerId)
+        .map(PriceList::getId)
         .orElseThrow(() -> new NotFoundException(
             "PRICE_LIST_NOT_FOUND",
             traceIdGenerator.gen(),
-            "Active price list is not found for supplier/customer",
+            "Price list is not found for supplier/customer",
             null,
             List.of(
                 ParamDto.builder().key("supplierId").value(supplierId.toString()).build(),
