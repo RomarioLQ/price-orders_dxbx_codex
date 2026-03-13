@@ -50,6 +50,7 @@ public class SupplierOrderIntegrationService {
             .number(o.getNumber())
             .customerId(o.getCustomerId())
             .supplierId(o.getSupplierId())
+            .addressId(o.getAddressId())
             .userId(o.getUserId())
             .datetime(o.getDatetime())
             .status(o.getStatus())
