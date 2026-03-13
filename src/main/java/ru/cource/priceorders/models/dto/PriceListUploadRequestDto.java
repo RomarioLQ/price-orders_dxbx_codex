@@ -21,6 +21,9 @@ public class PriceListUploadRequestDto {
   @JsonProperty("supplier")
   SupplierRefDto supplier;
 
+  @JsonProperty("customer_id")
+  UUID customerExternalId;
+
   @JsonProperty("price_list")
   PriceListDto priceList;
 
@@ -39,21 +42,12 @@ public class PriceListUploadRequestDto {
   @Builder
   @Jacksonized
   public static class PriceListDto {
+
     @JsonProperty("start_date")
     LocalDateTime startDate;
 
     @JsonProperty("end_date")
     LocalDateTime endDate;
-
-    @JsonProperty("is_active")
-    Boolean isActive;
-
-    /**
-     * Опционально: customer_system_guid для клиентского прайса.
-     * Если null - общий прайс.
-     */
-    @JsonProperty("customer_system_id")
-    UUID customerSystemGuid;
   }
 
   @Value

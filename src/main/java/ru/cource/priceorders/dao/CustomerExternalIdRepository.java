@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface CustomerExternalIdRepository extends JpaRepository<CustomerExternalId, UUID> {
 
   Optional<CustomerExternalId> findFirstByCustomerIdAndSupplierId(UUID customerId, UUID supplierId);
+
+  Optional<CustomerExternalId> findFirstByCustomerExternalIdAndSupplierId(UUID customerExternalId, UUID supplierId);
 }

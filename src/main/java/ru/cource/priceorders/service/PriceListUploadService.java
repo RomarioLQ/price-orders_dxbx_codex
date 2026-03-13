@@ -3,7 +3,7 @@ package ru.cource.priceorders.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import ru.cource.priceorders.dao.CustomerRepository;
+import ru.cource.priceorders.dao.CustomerExternalIdRepository;
 import ru.cource.priceorders.dao.NomenclatureRepository;
 import ru.cource.priceorders.dao.PriceListRepository;
 import ru.cource.priceorders.dao.PricePositionRepository;
@@ -11,6 +11,7 @@ import ru.cource.priceorders.dao.SupplierRepository;
 import ru.cource.priceorders.exception.common.NotFoundException;
 import ru.cource.priceorders.exception.common.ValidationException;
 import ru.cource.priceorders.exception.generator.TraceIdGenerator;
+import ru.cource.priceorders.models.CustomerExternalId;
 import ru.cource.priceorders.models.Nomenclature;
 import ru.cource.priceorders.models.PriceList;
 import ru.cource.priceorders.models.PricePosition;
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class PriceListUploadService {
 
   private final SupplierRepository supplierRepository;
-  private final CustomerRepository customerRepository;
+  private final CustomerExternalIdRepository customerExternalIdRepository;
   private final NomenclatureRepository nomenclatureRepository;
   private final PriceListRepository priceListRepository;
   private final PricePositionRepository pricePositionRepository;
@@ -57,16 +58,22 @@ public class PriceListUploadService {
       );
     }
 
+    UUID customerExternalId = Optional.ofNullable(request.getCustomerExternalId())
+        .orElseThrow(() -> validation("customer_id", "customer_id is required"));
+
+    UUID customerId = resolveCustomerId(supplierId, customerExternalId);
+
     PriceListUploadRequestDto.PriceListDto plDto = Optional.ofNullable(request.getPriceList())
         .orElseThrow(() -> validation("price_list", "price_list is required"));
 
     LocalDateTime startDate = Optional.ofNullable(plDto.getStartDate())
         .orElseThrow(() -> validation("price_list.start_date", "start_date is required"));
 
-    Boolean isActive = Optional.ofNullable(plDto.getIsActive())
-        .orElseThrow(() -> validation("price_list.is_active", "is_active is required"));
-
-    UUID customerId = resolveCustomerId(plDto.getCustomerSystemGuid());
+    priceListRepository.findFirstBySupplierIdAndCustomerIdOrderByStartDateDesc(supplierId, customerId)
+        .ifPresent(existing -> {
+          pricePositionRepository.deleteAllByPriceId(existing.getId());
+          priceListRepository.deleteById(existing.getId());
+        });
 
     UUID priceId = UUID.randomUUID();
 
@@ -76,7 +83,7 @@ public class PriceListUploadService {
     priceList.setCustomerId(customerId);
     priceList.setStartDate(startDate);
     priceList.setEndDate(plDto.getEndDate());
-    priceList.setActive(isActive);
+    priceList.setActive(true);
     priceListRepository.save(priceList);
 
     List<PriceListUploadRequestDto.PriceListPositionDto> positions = Optional.ofNullable(request.getPositions())
@@ -113,29 +120,9 @@ public class PriceListUploadService {
 
           UUID nomenclatureId = Optional.ofNullable(pos.getNomenclatureId()).orElse(UUID.randomUUID());
 
-          Optional<Nomenclature> existingOpt = nomenclatureRepository.findById(nomenclatureId);
-          Nomenclature nomenclature;
-          if (existingOpt.isPresent()) {
-            nomenclature = existingOpt.get();
-            if (!supplierId.equals(nomenclature.getSupplierId())) {
-              throw validation(
-                  "positions.nomenclature_id",
-                  "nomenclature supplier mismatch",
-                  List.of(
-                      ParamDto.builder().key("supplierId").value(supplierId.toString()).build(),
-                      ParamDto.builder().key("nomenclatureId").value(nomenclatureId.toString()).build()
-                  )
-              );
-            }
-          } else {
-            nomenclature = new Nomenclature();
-            nomenclature.setId(nomenclatureId);
-            nomenclature.setSupplierId(supplierId);
-            nomenclature.setCode(code);
-            nomenclature.setName(name);
-            nomenclatureRepository.save(nomenclature);
-            createdNomenclature.incrementAndGet();
-          }
+          Nomenclature nomenclature = nomenclatureRepository.findById(nomenclatureId)
+              .map(existing -> updateNomenclature(existing, supplierId, code, name, nomenclatureId))
+              .orElseGet(() -> createNomenclature(supplierId, nomenclatureId, code, name, createdNomenclature));
 
           if (!uniqueNomenclatureIds.add(nomenclature.getId())) {
             throw validation(
@@ -165,22 +152,58 @@ public class PriceListUploadService {
         .build();
   }
 
-  private UUID resolveCustomerId(UUID customerId) {
-    return Optional.ofNullable(customerId)
-        .map(this::getExistingCustomerId)
-        .orElse(null);
+  private UUID resolveCustomerId(UUID supplierId, UUID customerExternalId) {
+    return customerExternalIdRepository.findFirstByCustomerExternalIdAndSupplierId(customerExternalId, supplierId)
+        .map(CustomerExternalId::getCustomerId)
+        .orElseThrow(() -> new NotFoundException(
+            "CUSTOMER_EXTERNAL_ID_NOT_FOUND",
+            traceIdGenerator.gen(),
+            "Customer external id is not found for supplier",
+            null,
+            List.of(
+                ParamDto.builder().key("supplierId").value(supplierId.toString()).build(),
+                ParamDto.builder().key("customerExternalId").value(customerExternalId.toString()).build()
+            )
+        ));
   }
 
-  private UUID getExistingCustomerId(UUID customerId) {
-    return customerRepository.findById(customerId)
-        .orElseThrow(() -> new NotFoundException(
-            "CUSTOMER_NOT_FOUND",
-            traceIdGenerator.gen(),
-            "Customer is not found",
-            null,
-            List.of(ParamDto.builder().key("customerId").value(customerId.toString()).build())
-        ))
-        .getId();
+  private Nomenclature updateNomenclature(
+      Nomenclature existing,
+      UUID supplierId,
+      String code,
+      String name,
+      UUID nomenclatureId
+  ) {
+    if (!supplierId.equals(existing.getSupplierId())) {
+      throw validation(
+          "positions.nomenclature_id",
+          "nomenclature supplier mismatch",
+          List.of(
+              ParamDto.builder().key("supplierId").value(supplierId.toString()).build(),
+              ParamDto.builder().key("nomenclatureId").value(nomenclatureId.toString()).build()
+          )
+      );
+    }
+
+    existing.setCode(code);
+    existing.setName(name);
+    return nomenclatureRepository.save(existing);
+  }
+
+  private Nomenclature createNomenclature(
+      UUID supplierId,
+      UUID nomenclatureId,
+      String code,
+      String name,
+      AtomicInteger createdNomenclature
+  ) {
+    Nomenclature nomenclature = new Nomenclature();
+    nomenclature.setId(nomenclatureId);
+    nomenclature.setSupplierId(supplierId);
+    nomenclature.setCode(code);
+    nomenclature.setName(name);
+    createdNomenclature.incrementAndGet();
+    return nomenclatureRepository.save(nomenclature);
   }
 
   private ValidationException validation(String key, String message) {

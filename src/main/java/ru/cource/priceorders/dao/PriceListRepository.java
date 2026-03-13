@@ -10,6 +10,8 @@ import java.util.UUID;
 
 public interface PriceListRepository extends JpaRepository<PriceList, UUID> {
 
+  Optional<PriceList> findFirstBySupplierIdAndCustomerIdOrderByStartDateDesc(UUID supplierId, UUID customerId);
+
   @Query(value = """
       SELECT pl.id
       FROM price_list pl
@@ -20,7 +22,7 @@ public interface PriceListRepository extends JpaRepository<PriceList, UUID> {
       LIMIT 1
       """, nativeQuery = true)
   Optional<UUID> findLatestActiveCustomerPriceListId(@Param("supplierId") UUID supplierId,
-                                                   @Param("customerId") UUID customerId);
+                                                     @Param("customerId") UUID customerId);
 
   @Query(value = """
       SELECT pl.id
