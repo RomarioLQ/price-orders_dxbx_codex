@@ -42,8 +42,6 @@ public class PriceListUploadRequestDto {
   @Builder
   @Jacksonized
   public static class PriceListDto {
-    @JsonProperty("datetime")
-    LocalDateTime datetime;
 
     @JsonProperty("start_date")
     LocalDateTime startDate;

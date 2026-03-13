@@ -66,13 +66,10 @@ public class PriceListUploadService {
     PriceListUploadRequestDto.PriceListDto plDto = Optional.ofNullable(request.getPriceList())
         .orElseThrow(() -> validation("price_list", "price_list is required"));
 
-    LocalDateTime datetime = Optional.ofNullable(plDto.getDatetime())
-        .orElseThrow(() -> validation("price_list.datetime", "datetime is required"));
-
     LocalDateTime startDate = Optional.ofNullable(plDto.getStartDate())
         .orElseThrow(() -> validation("price_list.start_date", "start_date is required"));
 
-    priceListRepository.findFirstBySupplierIdAndCustomerIdOrderByDatetimeDesc(supplierId, customerId)
+    priceListRepository.findFirstBySupplierIdAndCustomerIdOrderByStartDateDesc(supplierId, customerId)
         .ifPresent(existing -> {
           pricePositionRepository.deleteAllByPriceId(existing.getId());
           priceListRepository.deleteById(existing.getId());
@@ -84,9 +81,9 @@ public class PriceListUploadService {
     priceList.setId(priceId);
     priceList.setSupplierId(supplierId);
     priceList.setCustomerId(customerId);
-    priceList.setDatetime(datetime);
     priceList.setStartDate(startDate);
     priceList.setEndDate(plDto.getEndDate());
+    priceList.setActive(true);
     priceListRepository.save(priceList);
 
     List<PriceListUploadRequestDto.PriceListPositionDto> positions = Optional.ofNullable(request.getPositions())

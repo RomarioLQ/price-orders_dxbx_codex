@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Прайс-лист поставщика для конкретного клиента.
+ * Прайс-лист поставщика. Может быть:
+ * - клиентским (customer_id != null)
+ * - общим (customer_id == null).
  */
 @Getter
 @Setter
@@ -29,13 +31,12 @@ public class PriceList {
   @Column(name = "customer_id")
   private UUID customerId;
 
-  @Column(name = "datetime", nullable = false)
-  private LocalDateTime datetime;
-
   @Column(name = "start_date", nullable = false)
   private LocalDateTime startDate;
 
   @Column(name = "end_date")
   private LocalDateTime endDate;
 
+  @Column(name = "is_active", nullable = false)
+  private boolean isActive;
 }
