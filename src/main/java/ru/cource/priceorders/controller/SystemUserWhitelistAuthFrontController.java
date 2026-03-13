@@ -15,7 +15,7 @@ import ru.cource.priceorders.service.SystemUserWhitelistAuthService;
  * Авторизация по белому списку (по телефону).
  */
 @RestController
-@RequestMapping("/front/price-orders/v1/system-users")
+@RequestMapping("/api/v1/system-users")
 @RequiredArgsConstructor
 @Validated
 @Slf4j
