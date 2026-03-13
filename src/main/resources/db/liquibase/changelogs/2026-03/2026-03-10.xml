@@ -150,14 +150,12 @@
                                            id uuid PRIMARY KEY,
                                            customer_id uuid NOT NULL,
                                            supplier_id uuid NOT NULL,
-                                           address_id uuid NOT NULL,
                                            user_id uuid NOT NULL,
                                            datetime timestamp NOT NULL,
                                            number varchar(100),
                                            status boolean DEFAULT FALSE,
                                            FOREIGN KEY (customer_id) REFERENCES customer(id),
                                            FOREIGN KEY (supplier_id) REFERENCES supplier(id),
-                                           FOREIGN KEY (address_id) REFERENCES address(id),
                                            FOREIGN KEY (user_id) REFERENCES system_users(id)
             );
         </sql>
@@ -177,6 +175,44 @@
                                         FOREIGN KEY (order_id) REFERENCES system_orders(id),
                                         FOREIGN KEY (nomenclature_id) REFERENCES nomenclature(id)
             );
+        </sql>
+    </changeSet>
+
+    <!-- system_orders.address_id -->
+    <changeSet id="2026-03-10-11" author="ro.bekmukhamedov">
+        <comment>Added address_id to system_orders with FK to address (backward-compatible).</comment>
+        <sql>
+            ALTER TABLE system_orders
+                ADD COLUMN IF NOT EXISTS address_id uuid;
+
+            UPDATE system_orders so
+               SET address_id = a.id
+              FROM address a
+             WHERE so.address_id IS NULL
+               AND a.customer_id = so.customer_id
+               AND a.id = (
+                   SELECT a2.id
+                     FROM address a2
+                    WHERE a2.customer_id = so.customer_id
+                    ORDER BY a2.id
+                    LIMIT 1
+               );
+
+            ALTER TABLE system_orders
+                ALTER COLUMN address_id SET NOT NULL;
+
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                      FROM pg_constraint
+                     WHERE conname = 'fk_system_orders_address_id'
+                ) THEN
+                    ALTER TABLE system_orders
+                        ADD CONSTRAINT fk_system_orders_address_id
+                        FOREIGN KEY (address_id) REFERENCES address(id);
+                END IF;
+            END $$;
         </sql>
     </changeSet>
 
