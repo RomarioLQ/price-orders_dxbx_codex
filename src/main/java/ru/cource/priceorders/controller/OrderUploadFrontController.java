@@ -17,14 +17,14 @@ import ru.cource.priceorders.service.OrderUploadService;
  * Front API для отправки заказа из Telegram Web App.
  */
 @RestController
-@RequestMapping("/front/price-orders/v1/orders")
+@RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 @Validated
 public class OrderUploadFrontController {
 
   private final OrderUploadService service;
 
-  @PostMapping("/upload")
+  @PostMapping("/import")
   public OrderUploadResponseDto upload(HttpServletRequest servletRequest, @RequestBody OrderUploadRequestDto request) {
     TelegramUserData telegramUserData =
         (TelegramUserData) servletRequest.getAttribute(TelegramRequestAttributes.TELEGRAM_USER_DATA);
