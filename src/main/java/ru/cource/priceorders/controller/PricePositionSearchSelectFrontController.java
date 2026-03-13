@@ -23,7 +23,7 @@ import java.util.UUID;
  * дергается этот метод и возвращается список подходящих позиций.
  */
 @RestController
-@RequestMapping("/front/price-orders/v1/price-positions")
+@RequestMapping("/api/v1/price-positions")
 @RequiredArgsConstructor
 @Validated
 public class PricePositionSearchSelectFrontController {
