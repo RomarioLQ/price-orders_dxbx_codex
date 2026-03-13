@@ -17,7 +17,6 @@ import ru.dxbx.common.dto.error.ParamDto;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,10 +31,7 @@ public class SupplierOrderIntegrationService {
 
   @Transactional(readOnly = true)
   public List<SupplierOrderUnprocessedResponseDto> getUnprocessed(UUID supplierId) {
-    UUID sid = Optional.ofNullable(supplierId)
-        .orElseThrow(() -> validation("supplierId", "supplierId is required"));
-
-    List<SystemOrder> orders = systemOrderRepository.findAllBySupplierIdAndStatusFalse(sid);
+    List<SystemOrder> orders = systemOrderRepository.findAllUnprocessedBySupplierId(supplierId);
     if (orders.isEmpty()) {
       return List.of();
     }
@@ -54,7 +50,7 @@ public class SupplierOrderIntegrationService {
             .userId(o.getUserId())
             .datetime(o.getDatetime())
             .status(o.getStatus())
-            .items(Optional.ofNullable(itemsByOrderId.get(o.getId())).orElse(List.of()).stream()
+            .items(itemsByOrderId.getOrDefault(o.getId(), List.of()).stream()
                 .map(toItemDto())
                 .toList())
             .build())
