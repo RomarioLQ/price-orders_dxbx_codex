@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -33,5 +34,5 @@ public class PricePositionSearchSelectResponseDto {
 
   /** Цена с НДС из прайс-листа (price_positions.price_with_vat). */
   @JsonProperty("price_with_vat")
-  Double priceWithVat;
+  BigDecimal priceWithVat;
 }

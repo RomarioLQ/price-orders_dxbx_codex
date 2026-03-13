@@ -41,7 +41,7 @@ public class PricePositionSearchSelectFrontController {
   public List<PricePositionSearchSelectResponseDto> searchSelect(
       HttpServletRequest request,
       @RequestParam("supplierId") @NotNull UUID supplierId,
-      @RequestParam(value = "searchString", required = false) String searchString
+      @RequestParam(value = "searchString", required = false, defaultValue = "") String searchString
   ) {
     TelegramUserData telegramUserData =
         (TelegramUserData) request.getAttribute(TelegramRequestAttributes.TELEGRAM_USER_DATA);

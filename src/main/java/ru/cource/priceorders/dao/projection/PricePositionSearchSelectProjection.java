@@ -1,5 +1,6 @@
 package ru.cource.priceorders.dao.projection;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -15,5 +16,5 @@ public interface PricePositionSearchSelectProjection {
 
   String getUnitMeasure();
 
-  Double getPriceWithVat();
+  BigDecimal getPriceWithVat();
 }

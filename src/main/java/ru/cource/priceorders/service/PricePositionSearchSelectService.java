@@ -13,7 +13,6 @@ import ru.cource.priceorders.models.dto.PricePositionSearchSelectResponseDto;
 import ru.dxbx.common.dto.error.ParamDto;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -39,7 +38,7 @@ public class PricePositionSearchSelectService {
     UUID customerId = telegramUserContextResolverService.resolve(telegramUserData).customerId();
     UUID priceId = resolveActivePriceListId(supplierId, customerId);
 
-    String normalizedSearch = Optional.ofNullable(searchString).orElse("").trim();
+    String normalizedSearch = searchString.trim();
 
     List<PricePositionSearchSelectProjection> rows = pricePositionRepository.searchSelect(
         priceId,
