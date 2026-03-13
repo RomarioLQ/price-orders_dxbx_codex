@@ -18,7 +18,9 @@ public interface PriceListRepository extends JpaRepository<PriceList, UUID> {
       WHERE pl.supplier_id = :supplierId
         AND pl.customer_id = :customerId
         AND pl.is_active = true
-      ORDER BY pl.end_date DESC NULLS FIRST, pl.start_date DESC
+        AND pl.start_date <= CURRENT_TIMESTAMP
+        AND (pl.end_date IS NULL OR pl.end_date >= CURRENT_TIMESTAMP)
+      ORDER BY pl.start_date DESC, pl.end_date DESC NULLS FIRST
       LIMIT 1
       """, nativeQuery = true)
   Optional<UUID> findLatestActiveCustomerPriceListId(@Param("supplierId") UUID supplierId,
@@ -30,7 +32,9 @@ public interface PriceListRepository extends JpaRepository<PriceList, UUID> {
       WHERE pl.supplier_id = :supplierId
         AND pl.customer_id IS NULL
         AND pl.is_active = true
-      ORDER BY pl.end_date DESC NULLS FIRST, pl.start_date DESC
+        AND pl.start_date <= CURRENT_TIMESTAMP
+        AND (pl.end_date IS NULL OR pl.end_date >= CURRENT_TIMESTAMP)
+      ORDER BY pl.start_date DESC, pl.end_date DESC NULLS FIRST
       LIMIT 1
       """, nativeQuery = true)
   Optional<UUID> findLatestActiveCommonPriceListId(@Param("supplierId") UUID supplierId);
