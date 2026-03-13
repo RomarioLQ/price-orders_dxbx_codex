@@ -150,12 +150,14 @@
                                            id uuid PRIMARY KEY,
                                            customer_id uuid NOT NULL,
                                            supplier_id uuid NOT NULL,
+                                           address_id uuid NOT NULL,
                                            user_id uuid NOT NULL,
                                            datetime timestamp NOT NULL,
                                            number varchar(100),
                                            status boolean DEFAULT FALSE,
                                            FOREIGN KEY (customer_id) REFERENCES customer(id),
                                            FOREIGN KEY (supplier_id) REFERENCES supplier(id),
+                                           FOREIGN KEY (address_id) REFERENCES address(id),
                                            FOREIGN KEY (user_id) REFERENCES system_users(id)
             );
         </sql>

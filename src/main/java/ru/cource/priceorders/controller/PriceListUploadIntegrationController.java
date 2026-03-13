@@ -17,12 +17,12 @@ import ru.cource.priceorders.service.PriceListUploadService;
 @RestController
 @Validated
 @RequiredArgsConstructor
-@RequestMapping("/integration/price-orders/v1/price-lists")
+@RequestMapping("/api/v1/price-lists")
 public class PriceListUploadIntegrationController {
 
   private final PriceListUploadService service;
 
-  @PostMapping("/upload")
+  @PostMapping("/import")
   public PriceListUploadResponseDto upload(@RequestBody @NotNull PriceListUploadRequestDto request) {
     return service.upload(request);
   }
